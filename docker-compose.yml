@@ -1,0 +1,35 @@
+# Leaderboard by itself (no Bar Games box needed):
+#   docker compose up -d --build
+# then open http://localhost:3008 (players), /tv (the TV), /host (scorekeeper), /admin.
+#
+# Put your own reverse proxy or tunnel in front for a public address. To serve it under
+# a path (https://example.com/leaderboard/), have the proxy strip the prefix and set BASE_PATH.
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "${BIND:-127.0.0.1}:${HOST_PORT:-3008}:3008"
+    environment:
+      PORT: "3008"
+      DATA_DIR: /data
+      GAME_NAME: "${GAME_NAME:-}"
+      # Leave unset to choose the staff password on the /admin first-run screen.
+      ADMIN_PASSWORD: "${ADMIN_PASSWORD:-}"
+      BASE_PATH: "${BASE_PATH:-}"
+      LOG_LEVEL: "${LOG_LEVEL:-info}"
+    volumes:
+      # The staff password hash, settings, boards and uploaded images survive rebuilds.
+      # The image runs as uid 1000: `sudo chown -R 1000:1000 ./data` if root made it.
+      - ./data:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3008/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3

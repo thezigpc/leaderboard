@@ -1,10 +1,50 @@
 # Leaderboard
 
-Scoreboards and tournament brackets for venue events (trivia nights, cornhole, pool, darts).
-The host keeps score from a phone; the TVs and players' phones update live. It supports
-points tables, single and double elimination, round robin, ladders and best-score boards,
-several boards at once, and an event theme per board.
+Scoreboards and tournament brackets for venue events: trivia nights, cornhole, pool,
+darts, leagues. The host keeps score from a phone; the TVs and the players' phones update
+live. Several boards can run at once, each with its own event look.
 
-It runs as an app on the Bar Games box, or standalone with `docker compose up`.
+It runs as an app on a Bar Games box, or by itself with `docker compose up`.
 
-**Status:** not built yet. See [CLAUDE.md](CLAUDE.md) for the brief.
+## Formats
+
+| Format | For |
+|---|---|
+| **Points table** | Scores per round (trivia, with a bonus round), or a league table of wins, draws and losses. Ties broken by the last round, the best round or rounds won; or head-to-head, wins, score difference. High or low wins. |
+| **Single elimination** | A knockout bracket. Byes go to the top seeds; optional third-place match. |
+| **Double elimination** | Winners and losers brackets and a grand final, with an optional bracket reset (on by default). Every size from 2 to 64 is tested. |
+| **Round robin** | Everyone plays everyone (once or twice), optionally in groups; then a knockout seeded from the standings. |
+| **Ladder** | A ranked list: beat someone above you (within reach) and take their place. |
+| **Best score / time** | One number per attempt (high score, fastest time); best attempt counts. |
+
+Every result can be changed or undone. Changing a bracket result that later matches were
+built on asks first, then re-flows the bracket. A no-show can be withdrawn: their remaining
+matches become walkovers. Matches can be put on lanes ("Board 2") and show as "up next".
+
+## Pages
+
+| Path | Who | What |
+|---|---|---|
+| `/` | players | the live boards; one board's standings, bracket and matches; "follow" your name to see when you're up |
+| `/tv` | the TVs | the live boards in rotation (or `/tv?board=<id>` for one), with up next, latest results and a follow-along QR code. Nothing to click. |
+| `/host` | scorekeepers | staff see every board; anyone with a board's PIN can score that board only |
+| `/admin` | staff | settings, board history (CSV export, copy as next week's board, delete), saved looks |
+
+## Running it
+
+```bash
+cp .env.example .env    # optional
+docker compose up -d --build
+```
+
+Open `http://localhost:3008/admin` and set the staff password. Data (boards, settings,
+uploaded images, the password hash) lives in `./data`.
+
+Development: `npm install`, `npm run dev` (server on :3008, client on :5178), `npm test`.
+
+## On a Bar Games box
+
+Install it from the box's Apps tab with this repo's URL. On a box it uses the venue's name
+and colors, staff signed in to the box get straight into the admin, finished boards count
+toward "Tonight's winners", events go to Home Assistant, and the scorekeeper page can start
+a countdown on the venue's screens. See [BARGAMES.md](BARGAMES.md).

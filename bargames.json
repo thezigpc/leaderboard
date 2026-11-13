@@ -20,10 +20,11 @@
   },
   "health": "/health",
   "events": [
-    "board_started",
-    "result_recorded",
-    "leader_changed",
-    "board_finished",
+    "x-leaderboard-board-started",
+    "x-leaderboard-result",
+    "x-leaderboard-leader-changed",
+    "x-leaderboard-board-finished",
+    "winner",
     "game_result"
   ],
   "commands": [],

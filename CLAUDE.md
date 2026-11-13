@@ -5,8 +5,9 @@ standalone. The venue runs its own events: trivia nights, cornhole, pool, darts,
 The host keeps score from their phone, and the TVs and players' phones show standings and
 brackets live. Several boards can run at once, and each can be themed for its event.
 
-**Status: brief only (2026-11-12).** Nothing is built yet. This file is the brief; keep it
-up to date as decisions are made ("As built" section at the end once there's code).
+**Status: 0.1.0 built (2026-11-13).** All six formats, the host, TV, phone and admin pages,
+and the box wiring. See "As built" at the end, [README.md](README.md) and
+[BARGAMES.md](BARGAMES.md). Keep this file up to date as decisions are made.
 
 ## Who uses it
 
@@ -129,7 +130,9 @@ Routes: `player` `/` (the public phone page), `table` `/tv` (the TV view), `host
    - `bg.reportResults()` when a board finishes, so the box's "Tonight's winners" counts
      the event winner.
    - `bg.emit()` events for Home Assistant (declare them in `bargames.json`):
-     `board_started`, `result_recorded`, `leader_changed`, `board_finished`.
+     `x-leaderboard-board-started`, `x-leaderboard-result`, `x-leaderboard-leader-changed`,
+     `x-leaderboard-board-finished`, plus the standard `winner` on finish. (The brief said
+     `board_started` etc.; the box rejects custom names without `x-`, so they were renamed.)
    - `bg.startCountdown()` for "Cornhole starts in 10 min", from the host's phone.
    - `bg.setAttention()` when something needs staff (e.g. a match waiting on a result for
      a long time).
@@ -170,13 +173,17 @@ entry fees, per-point live scoring, public internet sign-up forms.
    0.1.0 to GHCR (the publish workflow is in place), then the user installs it on the box
    with `bgctl install https://github.com/thezigpc/<repo> --enable`.
 
-## Open questions to ask the user early
+## Decisions (answered by the user, 2026-11-12)
 
-- Repo name on GitHub (the folder is `Leaderboard`; the box id is `leaderboard`).
-- Which formats matter most for the first release (a guess: trivia points table,
-  single and double elimination for cornhole and pool).
-- Should a non-staff host (e.g. a hired trivia host) get a scorekeeper link per board?
-- Double elimination: bracket reset in the grand final on by default?
+- **Repo:** `thezigpc/leaderboard` (matches the box id and the image name in
+  `bargames.json`).
+- **First release (0.1.0) has all six formats:** points table, single elimination,
+  double elimination, round robin, ladder, best score.
+- **Non-staff scorekeepers:** a **per-board PIN only** (no share link). A scorer opens
+  `/host`, enters the board's PIN, and can score that one board and nothing else. Staff
+  can change or clear the PIN. This supersedes "scorekeeper link or PIN" in rule 5 above.
+- **Double elimination:** the grand-final bracket reset is **on by default**, and can be
+  turned off per board.
 
 ## Release
 
@@ -188,3 +195,56 @@ entry fees, per-point live scoring, public internet sign-up forms.
 - The repo will be public: no LAN addresses, hostnames, passwords or anything copied from
   the user's screenshots in code, tests or docs. Use documentation IP ranges
   (192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24) in examples.
+
+## As built (2026-11-13)
+
+Layout: npm workspaces, the same shape as Menu and Buzz Board. Dev ports: server 3008,
+client 5178 (Vite proxies `/api`, `/uploads`, `/__bargames`, `/socket.io`).
+
+- **`shared/src`**: the whole model as pure functions.
+  - `types.ts`: a `Board` stores only inputs (participants, seeds, settings, results by match
+    id, round scores, league matches, ladder challenges, attempts, lane meta, theme).
+    Everything shown is derived.
+  - `bracket.ts`: a bracket is a fixed plan (each slot comes from a seed, a match's winner or
+    loser); `resolveBracket` resolves it against the results. Byes are values that flow
+    through the plan; a withdrawn player becomes a BYE at their next unplayed match; a
+    result whose two players no longer fit its slot is "stale" and ignored, which is how a
+    bracket re-flows. Losers of winners round r drop into losers round 2(r-1), alternately
+    reversed / half-swapped to avoid quick rematches. `bracketPlacings` ranks by how late
+    someone went out.
+  - `derive.ts`: `derive(board)` per format → matches, standings, columns, up next,
+    complete, champion. `ranking.ts`: ranking with tiebreakers applied within tied groups
+    (head-to-head is computed for the tied group only); remaining ties share a place.
+  - `actions.ts`: `applyAction(board, action, env)`: every change, validated, version
+    bumped. A bracket change that would clear later results refuses with `REFLOW` (and the
+    list) unless `force`. `season.ts` (season boards sum nightly boards by name), `csv.ts`
+    (export, formula-safe), `defaults.ts` (settings, presets, limits), `protocol.ts`.
+- **`server/src`**: `boards.ts` (`BoardService`: in memory, one JSON file per board in
+  `DATA_DIR/boards`, writes queued per board; version check → 409 `STALE` with the latest
+  view; undo stack of 50 in memory), `scorers.ts` (PINs and tokens), `uploads.ts` (images
+  checked by their bytes), `bargames.ts` (events, results, attention), `app.ts` (routes and
+  socket.io: a client sends `watch { boards, list, tv }` and gets `board`, `boards`, `tv`,
+  `removed` pushes).
+- **`client/src`**: `live.ts` (one socket; `useBoard(s)`, `useBoardList`, `useTvSettings`,
+  HTTP polling while the socket is down), `api.ts`, `pages/` (Phone, Tv, Host, Admin),
+  `host/` (score panels per format, result sheet, entrants, setup, `useActions`: queued
+  changes, STALE and REFLOW handling), `ui/` (Bracket with the TV camera, Standings,
+  Theme, AuthForm).
+- **Tests** (`npm test`, 75): every double-elimination size 2–64 with and without the reset
+  played out randomly (everyone but the champion loses exactly twice; 2n-2 or 2n-1 matches;
+  one 1st, 2nd and 3rd), single elimination 2–128, re-flow, withdrawals, lanes, every
+  format's ranking, the API (auth, PINs, staleness, undo, sockets, restart), and the box
+  wiring against a fake core.
+
+**Verifying a change:** `npm test`; `npm run build`; `npx bargames validate .`; the mock
+box from PowerShell: `npx bargames mock-box . --base /leaderboard --port <p> --core-port <p>
+--game http://127.0.0.1:<port>`, the server with the env it prints, `npx bargames check
+--game http://127.0.0.1:<port>`; then a Playwright walk-through at 1920x1080 (TV) and a
+phone size, through the mock gateway too. Watch the mock's log for `✗` events.
+
+**Things that bit:** a TV camera that pans to the bottom of a bracket can't avoid slicing a
+card along its top edge, so such cards fade out (`offcam`). The mock box drops custom
+events without `x-`.
+
+**Not built** (only when asked): a host-run "reveal" mode, per-point live scoring, player
+accounts, images on participants, swiss format.
