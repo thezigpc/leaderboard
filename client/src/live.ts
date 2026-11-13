@@ -173,7 +173,12 @@ export function useTvSettings(): TvSettings | null {
 
 const parseConfig = (raw: unknown): PublicConfig => {
   const o = (raw ?? {}) as Partial<PublicConfig>;
-  return { gameName: typeof o.gameName === "string" && o.gameName ? o.gameName : DEFAULT_NAME, build: String(o.build ?? ""), onBox: !!o.onBox };
+  return {
+    gameName: typeof o.gameName === "string" && o.gameName ? o.gameName : DEFAULT_NAME,
+    build: String(o.build ?? ""),
+    onBox: !!o.onBox,
+    newBoards: o.newBoards === "pin" || o.newBoards === "open" ? o.newBoards : "staff",
+  };
 };
 
 /** /api/config, fetched once and shared (the kit's cache). */

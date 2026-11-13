@@ -92,6 +92,14 @@ export function PhoneHome() {
           )}
         </>
       )}
+      {cfg && cfg.newBoards !== "staff" && (
+        <div className="ph-start">
+          <span className="muted">Running an event?</span>
+          <Link to="/host?new" className="button">
+            + Start a board
+          </Link>
+        </div>
+      )}
       <footer className="ph-foot">
         <BackToGames ctx={venue} />
       </footer>

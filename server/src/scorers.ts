@@ -5,8 +5,11 @@
 // and sends with each change. The token is tied to the PIN's salt, so setting a new PIN or
 // clearing it signs every scorer of that board out. Wrong guesses are limited per device and
 // per board.
+//
+// The venue's host PIN works the same way, for starting new boards: typing it gets a token
+// tied to that PIN's salt, so changing the PIN signs every host out.
 
-import { createHmac, randomBytes, scrypt, timingSafeEqual } from "node:crypto";
+import { createHmac, randomBytes, randomInt, scrypt, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
 import type { JsonStore } from "@bargames/gamekit/server";
 import { LIMITS, type Board } from "@leaderboard/shared";
@@ -25,6 +28,9 @@ export async function hashPin(pin: string): Promise<{ hash: string; salt: string
   const salt = randomBytes(16).toString("hex");
   return { hash: (await scryptAsync(pin, salt, 32)).toString("hex"), salt };
 }
+
+/** A fresh board PIN for a host who started a board themselves. */
+export const randomPin = (): string => String(randomInt(0, 10_000)).padStart(4, "0");
 
 async function pinMatches(pin: string, stored: { hash: string; salt: string }): Promise<boolean> {
   const got = await scryptAsync(pin, stored.salt, 32);
@@ -69,6 +75,32 @@ export class Scorers {
     const want = Buffer.from(this.sign(id, b.pin.salt, exp));
     const got = Buffer.from(sig);
     return want.length === got.length && timingSafeEqual(want, got) ? id : undefined;
+  }
+
+  issueHost(pin: { salt: string }): string {
+    const exp = this.now() + TOKEN_TTL_MS;
+    return `host.${exp}.${this.sign("host", pin.salt, exp)}`;
+  }
+
+  /** Whether a host token is good for the current host PIN. */
+  verifyHost(token: string, pin: { salt: string } | undefined): boolean {
+    const [kind, expS, sig] = token.split(".");
+    const exp = Number(expS);
+    if (!pin || kind !== "host" || !sig || !Number.isFinite(exp) || exp < this.now()) return false;
+    const want = Buffer.from(this.sign("host", pin.salt, exp));
+    const got = Buffer.from(sig);
+    return want.length === got.length && timingSafeEqual(want, got);
+  }
+
+  /** Checks the host PIN, counting wrong guesses like a board's PIN. */
+  async hostLogin(stored: { hash: string; salt: string } | undefined, pin: unknown, ip: string): Promise<{ ok: true; token: string } | { ok: false; status: number; error: string }> {
+    if (!stored) return { ok: false, status: 400, error: "Only staff can start boards here." };
+    const devKey = `host|${ip}`;
+    if (this.recent(devKey).length >= PER_DEVICE || this.recent("host").length >= PER_BOARD)
+      return { ok: false, status: 429, error: "Too many wrong PINs. Wait ten minutes, or ask staff." };
+    if (validPin(pin) && (await pinMatches(pin, stored))) return { ok: true, token: this.issueHost(stored) };
+    for (const k of [devKey, "host"]) this.fails.set(k, [...this.recent(k), this.now()]);
+    return { ok: false, status: 401, error: "That PIN isn't right." };
   }
 
   private recent(key: string): number[] {

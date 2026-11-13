@@ -1,10 +1,11 @@
 // The scorekeeper's phone UI (routes.host "/host"): staff see every board and can make new
-// ones; someone with a board's PIN sees that board. One-handed: big targets, few keystrokes.
+// ones; someone with a board's PIN sees that board. When the venue allows it, a host who
+// isn't staff can start a board too (with the host PIN, or without) and then scores it. One-handed: big targets, few keystrokes.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { FORMAT_NAMES, type BoardSummary, type BoardView, type WhoAmI } from "@leaderboard/shared";
-import { api, ApiError, scorerTokens, setScorerToken, setToken, type AuthStatus } from "../api";
+import { api, ApiError, scorerTokens, setHostToken, setScorerToken, setToken, type AuthStatus } from "../api";
 import { useBoard, useBoardList, useConfig, useTvSettings } from "../live";
 import { AuthForm, quietSignIn } from "../ui/AuthForm";
 import { since } from "../ui/format";
@@ -106,6 +107,41 @@ function PinSignIn({ boards, onDone }: { boards: BoardSummary[]; onDone: (id: st
   );
 }
 
+/** The venue's host PIN, for someone who isn't staff starting a board. */
+function HostPinForm({ onDone }: { onDone: () => void }) {
+  const [pin, setPin] = useState("");
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  return (
+    <form
+      className="card"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        setBusy(true);
+        setErr("");
+        try {
+          setHostToken((await api.hostLogin(pin)).token);
+          onDone();
+        } catch (error) {
+          setErr(error instanceof Error ? error.message : "That didn't work.");
+          setBusy(false);
+        }
+      }}
+    >
+      <h2>Start a board</h2>
+      <p className="muted">Running an event? Enter the host PIN from the staff.</p>
+      <label>
+        Host PIN
+        <input autoFocus inputMode="numeric" pattern="[0-9]*" autoComplete="one-time-code" maxLength={8} value={pin} onChange={(e) => setPin(e.target.value.replace(/D/g, ""))} required />
+      </label>
+      {err && <p className="error">{err}</p>}
+      <button className="primary wide" disabled={busy || pin.length < 4}>
+        Continue
+      </button>
+    </form>
+  );
+}
+
 function BoardRow({ b }: { b: BoardSummary }) {
   return (
     <Link to={`/host/${b.id}`} className="host-row">
@@ -121,12 +157,29 @@ function BoardRow({ b }: { b: BoardSummary }) {
   );
 }
 
-function HostHome({ who, status, refresh }: { who: WhoAmI; status: AuthStatus; refresh: () => void }) {
+function HostHome({ who, status, refresh }: { who: WhoAmI; status: AuthStatus; refresh: () => Promise<void> }) {
   const list = useBoardList() ?? [];
   const nav = useNavigate();
-  const [creating, setCreating] = useState(false);
+  // "Start a board" on the players' page opens /host?new straight into the new board.
+  const [params, setParams] = useSearchParams();
+  const [creating, setCreating] = useState(params.has("new"));
+  useEffect(() => {
+    if (params.has("new")) setParams({}, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [showSignIn, setShowSignIn] = useState(false);
   const cfg = useConfig();
+  const created = async (id: string, pin?: string) => {
+    await refresh();
+    nav(`/host/${id}`, { state: pin ? { pin } : undefined });
+  };
+  const newBoard = creating ? (
+    <NewBoardWizard onCreated={created} onCancel={() => setCreating(false)} />
+  ) : (
+    <button className="primary wide big" onClick={() => setCreating(true)}>
+      + New board
+    </button>
+  );
   const mine = who.staff ? list : list.filter((b) => who.boards.includes(b.id));
   const active = mine.filter((b) => b.status !== "finished");
   const done = mine.filter((b) => b.status === "finished").slice(0, 10);
@@ -149,17 +202,30 @@ function HostHome({ who, status, refresh }: { who: WhoAmI; status: AuthStatus; r
       </header>
       {who.staff ? (
         <>
-          {creating ? <NewBoardWizard onCreated={(id) => nav(`/host/${id}`)} onCancel={() => setCreating(false)} /> : (
-            <button className="primary wide big" onClick={() => setCreating(true)}>
-              + New board
-            </button>
-          )}
+          {newBoard}
           <TvControl list={list} staff />
         </>
       ) : (
         <>
-          {who.boards.length === 0 && <p className="muted">Sign in as staff, or use a board's PIN.</p>}
-          <PinSignIn boards={list} onDone={(id) => (refresh(), nav(`/host/${id}`))} />
+          {who.canCreate && newBoard}
+          {cfg?.newBoards === "pin" && !who.canCreate && creating ? (
+            <>
+              <HostPinForm onDone={() => void refresh()} />
+              <button className="link" onClick={() => setCreating(false)}>
+                Cancel
+              </button>
+            </>
+          ) : (
+            <>
+              {cfg?.newBoards === "pin" && !who.canCreate && (
+                <button className="wide" onClick={() => setCreating(true)}>
+                  + Start a board (host PIN)
+                </button>
+              )}
+              {who.boards.length === 0 && !who.canCreate && <p className="muted">Sign in as staff, or use a board's PIN.</p>}
+              <PinSignIn boards={list} onDone={(id) => (refresh(), nav(`/host/${id}`))} />
+            </>
+          )}
           {showSignIn ? (
             <AuthForm status={status} title="Staff sign-in" onDone={refresh} />
           ) : (
@@ -306,6 +372,9 @@ function HostBoard({ id, who, onAuthLost }: { id: string; who: WhoAmI; onAuthLos
   const cfg = useConfig();
   const [toast, showToast] = useToast();
   const [tab, setTab] = useState<Tab | null>(null);
+  const loc = useLocation();
+  const nav = useNavigate();
+  const newPin = (loc.state as { pin?: string } | null)?.pin;
   const wide = useWide();
   const [canUndo, setCanUndo] = useState(false);
   const view = s.status === "ready" ? s.view : null;
@@ -373,6 +442,16 @@ function HostBoard({ id, who, onAuthLost }: { id: string; who: WhoAmI; onAuthLos
         <span className={`status ${b.status}`}>{b.status}</span>
         {b.status === "finished" && b.winners?.length ? <> 🏆 {b.winners.join(" & ")}</> : null}
       </p>
+      {newPin && (
+        <div className="notice info" role="status">
+          <span>
+            You're keeping score on this board. Its PIN is <b>{newPin}</b>: on another phone, open the scorekeeper page and use it to score here too.
+          </span>
+          <button className="link" onClick={() => nav(".", { replace: true, state: null })}>
+            Got it
+          </button>
+        </div>
+      )}
       <nav className="tabs">
         {tabs.map((t) => (
           <button key={t} className={shown === t ? "on" : ""} onClick={() => setTab(t)}>
@@ -400,6 +479,7 @@ export function HostPage() {
   const { id } = useParams();
   const { who, status, error, refresh } = useWho();
   const list = useBoardList();
+  const cfg = useConfig();
   useEffect(() => {
     document.title = "Scorekeeper";
   }, []);
@@ -407,13 +487,13 @@ export function HostPage() {
     if (error) return <p className="error pad">{error}</p>;
     if (!who || !status) return <p className="muted center pad">Loading…</p>;
     if (id) return <HostBoard id={id} who={who} onAuthLost={refresh} />;
-    if (!who.staff && who.boards.length === 0 && !(list ?? []).some((b) => b.hasPin))
+    if (!who.staff && !who.canCreate && cfg?.newBoards !== "pin" && who.boards.length === 0 && !(list ?? []).some((b) => b.hasPin))
       return (
         <div className="host">
           <AuthForm status={status} title="Scorekeeper sign-in" onDone={refresh} />
         </div>
       );
     return <HostHome who={who} status={status} refresh={refresh} />;
-  }, [error, who, status, id, list, refresh]);
+  }, [error, who, status, id, list, refresh, cfg?.newBoards]);
   return content;
 }

@@ -53,13 +53,27 @@ export interface AppSettings {
   /** A called match with no result after this many minutes asks staff to look (0 = never). */
   attentionMinutes: number;
   customPresets: CustomPreset[];
+  /** Who may start a new board: staff only, anyone with the host PIN, or anyone. */
+  newBoards: NewBoards;
+  /** The host PIN (salted scrypt hash). Never sent to a browser. */
+  hostPin?: { hash: string; salt: string };
 }
+
+export type NewBoards = "staff" | "pin" | "open";
+
+/** The settings as the admin page sees them: the host PIN only as set or not. */
+export type AdminSettings = Omit<AppSettings, "hostPin"> & { hostPinSet: boolean };
+
+/** What the admin page sends: the host PIN in plain digits, or null to clear it. */
+export type AdminSettingsPatch = Partial<Omit<AppSettings, "hostPin">> & { hostPin?: string | null };
 
 export interface PublicConfig {
   gameName: string;
   /** Build id of the client the server is serving: a TV left on for days reloads when it changes. */
   build: string;
   onBox: boolean;
+  /** Who may start a board ("pin" only once a host PIN is set). */
+  newBoards: NewBoards;
 }
 
 /** Who is asking: venue staff (every board) or a scorekeeper with one board's PIN. */
@@ -67,6 +81,8 @@ export interface WhoAmI {
   staff: boolean;
   /** Boards this browser may score (staff: all). */
   boards: string[];
+  /** May start a new board (staff, the host PIN, or anyone when the venue allows it). */
+  canCreate: boolean;
 }
 
 export interface ServerToClientEvents {
@@ -96,4 +112,5 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   tv: DEFAULT_TV,
   attentionMinutes: 20,
   customPresets: [],
+  newBoards: "staff",
 };

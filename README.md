@@ -31,10 +31,10 @@ matches become walkovers. Matches can be put on lanes ("Board 2") and show as "u
 
 | Path | Who | What |
 |---|---|---|
-| `/` | players | the live boards; one board's standings, bracket and matches; "follow" your name to see when you're up |
+| `/` | players | the live boards; one board's standings, bracket and matches; "follow" your name to see when you're up; "Start a board" when the venue lets hosts start their own |
 | `/tv` | the TVs | the live boards in rotation (or `/tv?board=<id>` for one), with up next, latest results and a follow-along QR code. Nothing to click. |
-| `/host` | scorekeepers | staff see every board; anyone with a board's PIN can score that board only |
-| `/admin` | staff | settings, board history (CSV export, copy as next week's board, delete), saved looks |
+| `/host` | scorekeepers | staff see every board; anyone with a board's PIN can score that board only; a host who started a board scores it |
+| `/admin` | staff | settings (including who can start a board: staff only, anyone with the host PIN, or anyone), board history (CSV export, copy as next week's board, delete), saved looks |
 
 ## Running it
 

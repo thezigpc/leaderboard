@@ -191,7 +191,7 @@ describe("scorekeeper PINs", () => {
     const ok = (await (await t.send("POST", `/api/boards/${mine.board.id}/pin-login`, { pin: "4321" })).json()) as { token: string };
     const scorer = { "x-scorer": ok.token };
     const me = (await (await t.get("/api/me", scorer)).json()) as { staff: boolean; boards: string[] };
-    assert.deepEqual(me, { staff: false, boards: [mine.board.id] });
+    assert.deepEqual(me, { staff: false, boards: [mine.board.id], canCreate: false });
     assert.equal((await t.act(scorer, mine.board.id, { type: "score", pid: mine.board.participants[0].id, roundId: "r1", value: 7 })).status, 200);
     assert.equal((await t.act(scorer, other.board.id, { type: "rename", title: "Hacked" })).status, 401);
     // Nor staff-only things.
@@ -217,6 +217,73 @@ describe("scorekeeper PINs", () => {
     assert.equal(last, 429);
     // Even the right PIN waits now.
     assert.equal((await t.send("POST", `/api/boards/${v.board.id}/pin-login`, { pin: "5555" })).status, 429);
+  });
+});
+
+describe("hosts who aren't staff starting boards", () => {
+  let t: TestApp;
+  let staff: Record<string, string>;
+  before(async () => {
+    t = await startApp();
+    staff = await t.staff();
+  });
+  after(() => t.stop());
+  const cfg = async () => ((await (await t.get("/api/config")).json()) as { newBoards: string }).newBoards;
+  const create = (h: Record<string, string> = {}) => t.send("POST", "/api/boards", { title: "Quiz", format: "points", preset: "trivia" }, h);
+
+  test("staff only by default; a PIN mode without a PIN stays staff only", async () => {
+    assert.equal(await cfg(), "staff");
+    assert.equal((await create()).status, 401);
+    await t.send("PUT", "/api/admin/settings", { newBoards: "pin" }, staff);
+    assert.equal(await cfg(), "staff");
+    assert.equal((await t.send("POST", "/api/host-login", { pin: "1234" })).status, 400);
+  });
+
+  test("the host PIN: hashed, never shown, lets a host start a board and score only it", async () => {
+    assert.equal((await t.send("PUT", "/api/admin/settings", { hostPin: "12" }, staff)).status, 400);
+    const r = (await (await t.send("PUT", "/api/admin/settings", { newBoards: "pin", hostPin: "2468" }, staff)).json()) as { settings: Record<string, unknown> };
+    assert.equal(r.settings.hostPinSet, true);
+    assert.ok(!("hostPin" in r.settings), "the hash never leaves the server");
+    const got = (await (await t.get("/api/admin/settings", staff)).json()) as Record<string, unknown>;
+    assert.deepEqual([got.hostPinSet, "hostPin" in got], [true, false]);
+    assert.equal(await cfg(), "pin");
+
+    assert.equal((await create()).status, 401);
+    assert.equal((await t.send("POST", "/api/host-login", { pin: "0000" })).status, 401);
+    const { token } = (await (await t.send("POST", "/api/host-login", { pin: "2468" })).json()) as { token: string };
+    const host = { "x-host": token };
+    assert.equal(((await (await t.get("/api/me", host)).json()) as { canCreate: boolean }).canCreate, true);
+    const made = (await (await create(host)).json()) as BoardView & { scorer: { token: string; pin: string } };
+    assert.match(made.scorer.pin, /^\d{4}$/);
+    assert.equal(made.board.hasPin, true);
+    const scorer = { ...host, "x-scorer": made.scorer.token };
+    assert.equal((await t.act(scorer, made.board.id, { type: "addParticipants", names: ["Quizzards\nBrainiacs"] })).status, 200);
+    // A second phone joins with the board's PIN.
+    assert.equal((await t.send("POST", `/api/boards/${made.board.id}/pin-login`, { pin: made.scorer.pin })).status, 200);
+    // Not other boards, nor staff things.
+    const other = await t.board(staff, "Staff board", "points", ["A"]);
+    assert.equal((await t.act(scorer, other.board.id, { type: "rename", title: "Nope" })).status, 401);
+    assert.equal((await t.send("DELETE", `/api/boards/${made.board.id}`, null, scorer)).status, 401);
+    assert.equal((await t.get("/api/admin/settings", scorer)).status, 401);
+    // A new host PIN signs hosts out (their board's scorer token still works).
+    await t.send("PUT", "/api/admin/settings", { hostPin: "1357" }, staff);
+    assert.equal((await create(host)).status, 401);
+    assert.equal((await t.act(scorer, made.board.id, { type: "rename", title: "Still mine" })).status, 200);
+    // Clearing the PIN makes it staff only again.
+    await t.send("PUT", "/api/admin/settings", { hostPin: null }, staff);
+    assert.equal(await cfg(), "staff");
+  });
+
+  test("anyone may start boards when the venue allows it, a few an hour", async () => {
+    await t.send("PUT", "/api/admin/settings", { newBoards: "open" }, staff);
+    assert.equal(await cfg(), "open");
+    assert.equal(((await (await t.get("/api/me")).json()) as { canCreate: boolean }).canCreate, true);
+    let status = 0;
+    for (let i = 0; i < 13; i++) status = (await create()).status;
+    assert.equal(status, 429);
+    // Staff aren't counted.
+    assert.equal((await create(staff)).status, 200);
+    await t.send("PUT", "/api/admin/settings", { newBoards: "staff" }, staff);
   });
 });
 

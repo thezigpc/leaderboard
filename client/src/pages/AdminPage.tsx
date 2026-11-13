@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { BoxAdminLink } from "@bargames/gamekit/client";
-import { FORMAT_NAMES, type AppSettings } from "@leaderboard/shared";
+import { FORMAT_NAMES, type AdminSettings, type AdminSettingsPatch, type NewBoards } from "@leaderboard/shared";
 import { api, ApiError, csvUrl, setToken, type AuthStatus } from "../api";
 import { useBoardList, useConfig } from "../live";
 import { useVenue } from "../useVenue";
@@ -13,7 +13,7 @@ import { AuthForm, quietSignIn } from "../ui/AuthForm";
 
 type Phase = { kind: "loading" } | { kind: "auth"; status: AuthStatus } | { kind: "ready" } | { kind: "offline"; message: string };
 
-function Settings({ s, save }: { s: AppSettings; save: (p: Partial<AppSettings>) => Promise<void> }) {
+function Settings({ s, save }: { s: AdminSettings; save: (p: AdminSettingsPatch) => Promise<void> }) {
   const [name, setName] = useState(s.name);
   const cfg = useConfig();
   return (
@@ -45,11 +45,79 @@ function Settings({ s, save }: { s: AppSettings; save: (p: Partial<AppSettings>)
   );
 }
 
+/** Who may start a board: staff, anyone with the host PIN (a trivia host who isn't staff), or anyone. */
+function NewBoardsCard({ s, save }: { s: AdminSettings; save: (p: AdminSettingsPatch) => Promise<void> }) {
+  const [pin, setPin] = useState("");
+  const choices: { id: NewBoards; title: string; sub: string }[] = [
+    { id: "staff", title: "Staff only", sub: "Staff start boards from the scorekeeper page." },
+    { id: "pin", title: "Anyone with the host PIN", sub: "The players' page shows \"Start a board\"; it asks for the PIN." },
+    { id: "open", title: "Anyone", sub: "No PIN. Anyone who can open the players' page can start a board." },
+  ];
+  return (
+    <section className="card">
+      <h2>Who can start a board</h2>
+      <p className="muted small">
+        For events run by someone who isn't staff. A host who starts a board keeps score on that board only, and gets a PIN for it to score from a second phone.
+      </p>
+      <div className="pick-list" role="radiogroup" aria-label="Who can start a board">
+        {choices.map((c) => (
+          <button key={c.id} role="radio" aria-checked={s.newBoards === c.id} className={`pick-row ${s.newBoards === c.id ? "on" : ""}`} onClick={() => save({ newBoards: c.id })}>
+            <span className="box" aria-hidden="true">
+              {s.newBoards === c.id ? "✓" : ""}
+            </span>
+            <span className="what">
+              <b>{c.title}</b>
+              <small>{c.sub}</small>
+            </span>
+          </button>
+        ))}
+      </div>
+      {s.newBoards === "pin" && (
+        <>
+          {!s.hostPinSet && <p className="notice warn">Set a host PIN to turn this on. Until then only staff can start boards.</p>}
+          <form
+            className="two"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void save({ hostPin: pin }).then(() => setPin(""));
+            }}
+          >
+            <label>
+              {s.hostPinSet ? "New host PIN" : "Host PIN"}
+              <input
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={8}
+                placeholder="4 to 8 digits"
+                autoComplete="off"
+                value={pin}
+                onChange={(e) => setPin(e.target.value.replace(/D/g, ""))}
+              />
+            </label>
+            <button className="primary" disabled={pin.length < 4}>
+              {s.hostPinSet ? "Change PIN" : "Set PIN"}
+            </button>
+          </form>
+          {s.hostPinSet && (
+            <p className="muted small">
+              A host PIN is set. Changing it signs hosts out of starting more boards; boards they already started stay theirs.{" "}
+              <button className="link" onClick={() => save({ hostPin: null })}>
+                Remove the PIN
+              </button>
+            </p>
+          )}
+        </>
+      )}
+      {s.newBoards === "open" && <p className="notice warn">If this app can be reached from the internet, anyone there can start boards too (a few an hour each).</p>}
+    </section>
+  );
+}
+
 export function AdminPage() {
   const venue = useVenue();
   const nav = useNavigate();
   const [phase, setPhase] = useState<Phase>({ kind: "loading" });
-  const [settings, setSettings] = useState<AppSettings | null>(null);
+  const [settings, setSettings] = useState<AdminSettings | null>(null);
   const [notice, setNotice] = useState<{ text: string; error: boolean } | null>(null);
   const list = useBoardList() ?? [];
 
@@ -77,7 +145,7 @@ export function AdminPage() {
     return () => clearTimeout(t);
   }, [notice]);
 
-  const save = async (patch: Partial<AppSettings>) => {
+  const save = async (patch: AdminSettingsPatch) => {
     try {
       const r = await api.saveSettings(patch);
       setSettings(r.settings);
@@ -131,6 +199,7 @@ export function AdminPage() {
             </Link>
           </p>
           <Settings s={settings} save={save} />
+          <NewBoardsCard s={settings} save={save} />
 
           <section className="card">
             <h2>Boards</h2>

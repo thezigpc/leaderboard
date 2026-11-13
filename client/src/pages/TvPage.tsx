@@ -230,9 +230,16 @@ export function TvPage() {
 
   // On a box: hide the pointer, keep the screen awake, mark the page as a shared screen, and
   // show "Reconnecting…" while the socket is down.
+  // Undone on the way out: Back to another page of this app keeps the same document, and
+  // the pointer, the wake lock and the "shared screen" mark must not follow it there.
   useEffect(() => {
-    if (!venue || tm.current) return;
-    tm.current = tableMode(venue);
+    if (!venue) return;
+    const t = tableMode(venue);
+    tm.current = t;
+    return () => {
+      t.stop();
+      if (tm.current === t) tm.current = null;
+    };
   }, [venue]);
   useEffect(() => {
     const s = getSocket();

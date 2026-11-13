@@ -3,13 +3,14 @@
 //
 // Two kinds of sign-in, both kept in this browser (keys prefixed: every app shares the
 // venue's address): the staff session (the kit's admin token) and scorekeeper tokens, one per
-// board whose PIN was entered.
+// board whose PIN was entered, and the host token (the venue's host PIN, for starting boards).
 
 import { bgUrl } from "@bargames/sdk/client";
-import type { Action, AppSettings, BoardView, FormatId, PeopleSeen, TvSettings, WhoAmI } from "@leaderboard/shared";
+import type { Action, AdminSettings, AdminSettingsPatch, BoardView, FormatId, PeopleSeen, TvSettings, WhoAmI } from "@leaderboard/shared";
 
 const TOKEN_KEY = "leaderboard_adminToken";
 const SCORERS_KEY = "leaderboard_scorers";
+const HOST_KEY = "leaderboard_hostToken";
 
 const storage = {
   get(key: string): string {
@@ -34,6 +35,13 @@ export const getToken = (): string => storage.get(TOKEN_KEY) || memToken;
 export function setToken(token: string): void {
   memToken = token;
   storage.set(TOKEN_KEY, token);
+}
+
+let memHost = "";
+export const getHostToken = (): string => storage.get(HOST_KEY) || memHost;
+export function setHostToken(token: string): void {
+  memHost = token;
+  storage.set(HOST_KEY, token);
 }
 
 let memScorers: Record<string, string> = {};
@@ -72,6 +80,8 @@ function authHeaders(): Record<string, string> {
   if (token) h.authorization = `Bearer ${token}`;
   const scorers = Object.values(scorerTokens());
   if (scorers.length) h["x-scorer"] = scorers.join(" ");
+  const host = getHostToken();
+  if (host) h["x-host"] = host;
   return h;
 }
 
@@ -105,6 +115,8 @@ export interface AuthStatus {
 }
 
 export type BoardResponse = BoardView & { canUndo?: boolean };
+/** A board a host (not staff) started: they score it, and it has a PIN for a second phone. */
+export type CreatedBoard = BoardView & { scorer?: { token: string; pin: string } };
 
 export const api = {
   status: () => request<AuthStatus>("GET", "/api/admin/status"),
@@ -121,7 +133,8 @@ export const api = {
     keepEntrants?: boolean;
     seedFrom?: { boardId: string; top: number };
     entry?: { kind: "players" | "teams"; size: number };
-  }) => request<BoardView>("POST", "/api/boards", body),
+  }) => request<CreatedBoard>("POST", "/api/boards", body),
+  hostLogin: (pin: string) => request<{ token: string }>("POST", "/api/host-login", { pin }),
   people: (exclude?: string) => request<PeopleSeen>("GET", `/api/people${exclude ? `?exclude=${encodeURIComponent(exclude)}` : ""}`),
   act: (id: string, version: number, action: Action) => request<BoardView>("POST", `/api/boards/${encodeURIComponent(id)}/actions`, { version, action }),
   undo: (id: string, version: number) => request<BoardView>("POST", `/api/boards/${encodeURIComponent(id)}/undo`, { version }),
@@ -132,8 +145,8 @@ export const api = {
   countdown: (label: string, minutes: number) => request("POST", "/api/countdown", { label, minutes }),
   clearCountdown: () => request("DELETE", "/api/countdown"),
   upload: (file: File) => request<{ file: string }>("POST", "/api/uploads", file, { "content-type": file.type || "application/octet-stream" }),
-  settings: () => request<AppSettings>("GET", "/api/admin/settings"),
-  saveSettings: (s: Partial<AppSettings>) => request<{ settings: AppSettings }>("PUT", "/api/admin/settings", s),
+  settings: () => request<AdminSettings>("GET", "/api/admin/settings"),
+  saveSettings: (s: AdminSettingsPatch) => request<{ settings: AdminSettings }>("PUT", "/api/admin/settings", s),
 };
 
 export const csvUrl = (id: string) => bgUrl(`/api/boards/${encodeURIComponent(id)}/export.csv`);

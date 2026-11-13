@@ -3,7 +3,7 @@
 
 import { useState } from "react";
 import { EVENTS, FORMAT_NAMES, PRESETS, type FormatId } from "@leaderboard/shared";
-import { api } from "../api";
+import { api, setScorerToken } from "../api";
 
 const FORMAT_SHORT: Record<FormatId, string> = {
   points: "Trivia rounds, or a league of wins and losses",
@@ -75,7 +75,8 @@ export function FormatPicture({ f }: { f: FormatId }) {
   }
 }
 
-export function NewBoardWizard({ onCreated, onCancel }: { onCreated: (id: string) => void; onCancel: () => void }) {
+/** onCreated gets the board's PIN when a host who isn't staff started it (they score it with a token kept here). */
+export function NewBoardWizard({ onCreated, onCancel }: { onCreated: (id: string, pin?: string) => void | Promise<void>; onCancel: () => void }) {
   const [event, setEvent] = useState<string>("");
   const [format, setFormat] = useState<FormatId>("points");
   const [who, setWho] = useState<Who>("players");
@@ -114,7 +115,8 @@ export function NewBoardWizard({ onCreated, onCancel }: { onCreated: (id: string
             preset: event || undefined,
             entry: who === "players" ? { kind: "players", size: 0 } : { kind: "teams", size: who === "pairs" ? 2 : 0 },
           });
-          onCreated(v.board.id);
+          if (v.scorer) setScorerToken(v.board.id, v.scorer.token);
+          await onCreated(v.board.id, v.scorer?.pin);
         } catch (error) {
           setErr(error instanceof Error ? error.message : "That didn't work.");
           setBusy(false);

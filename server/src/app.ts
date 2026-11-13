@@ -33,6 +33,8 @@ import {
   peopleSeen,
   presetTheme,
   type Action,
+  type AdminSettings,
+  type AdminSettingsPatch,
   type AppSettings,
   type ClientToServerEvents,
   type CustomPreset,
@@ -45,7 +47,7 @@ import {
 } from "@leaderboard/shared";
 import { announceChange, attentionReporter, waitingTooLong } from "./bargames.js";
 import { BoardService, newId, validBoardId, type ApplyOutcome } from "./boards.js";
-import { hashPin, Scorers, validPin } from "./scorers.js";
+import { hashPin, randomPin, Scorers, validPin } from "./scorers.js";
 import { MAX_UPLOAD_MB, Uploads } from "./uploads.js";
 
 export interface AppOptions {
@@ -101,8 +103,20 @@ function normalizeSettings(s: AppSettings): AppSettings {
     tv: normalizeTv(s.tv),
     attentionMinutes: Math.min(240, Math.max(0, Math.round(Number(s.attentionMinutes) || 0))),
     customPresets: presets,
+    newBoards: s.newBoards === "pin" || s.newBoards === "open" ? s.newBoards : "staff",
+    hostPin:
+      s.hostPin && typeof s.hostPin.hash === "string" && typeof s.hostPin.salt === "string" ? { hash: s.hostPin.hash, salt: s.hostPin.salt } : undefined,
   };
 }
+
+/** Settings for the admin page: never the host PIN's hash. */
+function adminView(s: AppSettings): AdminSettings {
+  const { hostPin, ...rest } = s;
+  return { ...rest, hostPinSet: !!hostPin };
+}
+
+/** Boards one device (not staff) may start per hour. */
+const HOST_CREATES_PER_HOUR = 12;
 
 export async function createApp(o: AppOptions): Promise<LeaderboardApp> {
   const bg = o.bg;
@@ -159,6 +173,18 @@ export async function createApp(o: AppOptions): Promise<LeaderboardApp> {
       .filter((x): x is string => !!x);
   };
   const canScore = (req: Request, id: string) => isStaff(req) || scorerBoards(req).includes(id);
+  // Who may start a board: staff; anyone, when the venue allows it; or a host who typed the
+  // host PIN ("pin" without a PIN set means staff only).
+  const newBoards = (): AppSettings["newBoards"] => {
+    const s = settings.get();
+    return s.newBoards === "pin" && !s.hostPin ? "staff" : s.newBoards;
+  };
+  const isHost = (req: Request) => {
+    const mode = newBoards();
+    return mode === "open" || (mode === "pin" && scorers.verifyHost(String(req.get("x-host") ?? ""), settings.get().hostPin));
+  };
+  const canCreate = (req: Request) => isStaff(req) || isHost(req);
+  const hostCreates = new Map<string, number[]>();
 
   // ----------------------------------------------------------------- live updates
   let io: IoServer<ClientToServerEvents, ServerToClientEvents> | undefined;
@@ -211,7 +237,7 @@ export async function createApp(o: AppOptions): Promise<LeaderboardApp> {
     "/api/config",
     safe(async (_req, res) => {
       res.set("Cache-Control", "no-cache");
-      const body: PublicConfig = { gameName: await displayName(), build, onBox: bg.connected };
+      const body: PublicConfig = { gameName: await displayName(), build, onBox: bg.connected, newBoards: newBoards() };
       res.json(body);
     }),
   );
@@ -246,7 +272,7 @@ export async function createApp(o: AppOptions): Promise<LeaderboardApp> {
 
   app.get("/api/me", (req, res) => {
     const staff = isStaff(req);
-    const body: WhoAmI = { staff, boards: staff ? boards.all().map((b) => b.id) : scorerBoards(req) };
+    const body: WhoAmI = { staff, boards: staff ? boards.all().map((b) => b.id) : scorerBoards(req), canCreate: staff || isHost(req) };
     res.json(body);
   });
 
@@ -268,13 +294,20 @@ export async function createApp(o: AppOptions): Promise<LeaderboardApp> {
     "/api/boards",
     json,
     safe(async (req, res) => {
-      if (!isStaff(req)) return void res.status(401).json({ ok: false, error: "Staff only. Sign in first." });
+      const staff = isStaff(req);
+      if (!staff && !canCreate(req))
+        return void res.status(401).json({ ok: false, error: newBoards() === "pin" ? "Enter the host PIN first." : "Staff only. Sign in first." });
+      let ip = "";
+      if (!staff) {
+        ip = bg.clientIp(req);
+        const recent = (hostCreates.get(ip) ?? []).filter((t) => t > now() - 3600_000);
+        if (recent.length >= HOST_CREATES_PER_HOUR) return void res.status(429).json({ ok: false, error: "That's a lot of new boards. Wait a while, or ask staff." });
+        hostCreates.set(ip, [...recent, now()]);
+      }
       const body = (req.body ?? {}) as Record<string, unknown>;
       const format = FORMATS.includes(body.format as FormatId) ? (body.format as FormatId) : "points";
       const seedFrom = body.seedFrom && typeof body.seedFrom === "object" ? (body.seedFrom as { boardId: string; top: number }) : undefined;
-      send(
-        res,
-        await boards.create({
+      const made = await boards.create({
           title: typeof body.title === "string" ? body.title : "",
           format,
           preset: typeof body.preset === "string" ? body.preset : undefined,
@@ -285,8 +318,28 @@ export async function createApp(o: AppOptions): Promise<LeaderboardApp> {
             body.entry && typeof body.entry === "object"
               ? { kind: (body.entry as { kind?: unknown }).kind === "teams" ? "teams" : "players", size: Number((body.entry as { size?: unknown }).size) || 0 }
               : undefined,
-        }),
-      );
+      });
+      if (!made.ok || staff) return send(res, made);
+      // A host who isn't staff keeps score on the board they started: it gets a PIN (so a
+      // second phone can join), and this phone gets that board's scorekeeper token.
+      const pin = randomPin();
+      const withPin = await boards.setPin(made.view.board.id, await hashPin(pin));
+      if (!withPin.ok) return send(res, withPin);
+      const b = boards.get(made.view.board.id)!;
+      log.info("boards", "board started by a host", { board: b.id });
+      res.json({ ok: true, ...withPin.view, scorer: { token: scorers.issue(b), pin } });
+    }),
+  );
+
+  app.post(
+    "/api/host-login",
+    json,
+    safe(async (req, res) => {
+      if (newBoards() !== "pin") return void res.status(400).json({ ok: false, error: newBoards() === "open" ? "No PIN needed: anyone can start a board." : "Only staff can start boards here." });
+      const r = await scorers.hostLogin(settings.get().hostPin, (req.body ?? {}).pin, bg.clientIp(req));
+      if (!r.ok) return void res.status(r.status).json({ ok: false, error: r.error });
+      log.info("scorers", "host signed in");
+      res.json({ ok: true, token: r.token });
     }),
   );
 
@@ -425,19 +478,25 @@ export async function createApp(o: AppOptions): Promise<LeaderboardApp> {
   // Staff signed in to the venue box's admin get a session without the password (SDK 0.7.0).
   // isStaff trusts the gateway's headers only on a box, so standalone it's always false.
   const admin = adminRouter({ auth, clientIp: (req) => bg.clientIp(req), trusted: (req) => bg.isStaff(req) });
-  admin.get("/settings", (_req, res) => void res.json(settings.get()));
+  admin.get("/settings", (_req, res) => void res.json(adminView(settings.get())));
   admin.put(
     "/settings",
     safe(async (req, res) => {
       const cur = settings.get();
-      const body = (req.body ?? {}) as Partial<AppSettings>;
+      const body = (req.body ?? {}) as AdminSettingsPatch;
+      let hostPin = cur.hostPin;
+      if (body.hostPin === null) hostPin = undefined;
+      else if (body.hostPin !== undefined) {
+        if (!validPin(body.hostPin)) return void res.status(400).json({ ok: false, error: "A PIN is 4 to 8 digits." });
+        hostPin = await hashPin(body.hostPin);
+      }
       const presets = Array.isArray(body.customPresets)
         ? body.customPresets.map((p) => ({ ...p, id: typeof p?.id === "string" && /^[a-z0-9]{4,20}$/.test(p.id) ? p.id : newId(8) }))
         : cur.customPresets;
-      const saved = await settings.set({ ...cur, ...body, tv: normalizeTv(body.tv, cur.tv), customPresets: presets });
+      const saved = await settings.set({ ...cur, ...body, tv: normalizeTv(body.tv, cur.tv), customPresets: presets, hostPin });
       io?.to("tv").emit("tv", saved.tv);
       log.info("admin", "settings saved");
-      res.json({ ok: true, settings: saved });
+      res.json({ ok: true, settings: adminView(saved) });
     }),
   );
   app.use("/api/admin", json, admin);

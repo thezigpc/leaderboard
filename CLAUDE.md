@@ -5,7 +5,7 @@ standalone. The venue runs its own events: trivia nights, cornhole, pool, darts,
 The host keeps score from their phone, and the TVs and players' phones show standings and
 brackets live. Several boards can run at once, and each can be themed for its event.
 
-**Status: 0.2.0 released (2026-11-13): the phone-first setup below. 0.1.0 had** all six formats, the host, TV, phone and admin pages,
+**Status: 0.3.0 released (2026-11-13): hosts who aren't staff can start boards, and the TV cursor fix (below). 0.2.0: the phone-first setup. 0.1.0 had** all six formats, the host, TV, phone and admin pages,
 and the box wiring. See "As built" at the end, [README.md](README.md) and
 [BARGAMES.md](BARGAMES.md). Keep this file up to date as decisions are made.
 
@@ -242,7 +242,7 @@ box from PowerShell: `npx bargames mock-box . --base /leaderboard --port <p> --c
 --game http://127.0.0.1:<port>`; then a Playwright walk-through at 1920x1080 (TV) and a
 phone size, through the mock gateway too. Watch the mock's log for `✗` events.
 
-**Things that bit:** a TV camera that pans to the bottom of a bracket can't avoid slicing a
+**Things that bit:** anything the TV page puts on the document (tableMode) must be undone on unmount: Back stays in the same document. A TV camera that pans to the bottom of a bracket can't avoid slicing a
 card along its top edge, so such cards fade out (`offcam`). The mock box drops custom
 events without `x-`.
 
@@ -276,6 +276,24 @@ The host's setup was rebuilt for phones first. Mockups: https://claude.ai/artifa
   final (`meetingRound`, `apartSwap` in `bracket.ts`) and offers "Keep them apart".
 - Styles for all of this are in `client/src/host.css`. Tests: `shared/test/entrants.test.ts`
   and the pairs/regulars test in `server/test/api.test.ts` (84 in all).
+
+## Hosts who aren't staff (2026-11-13, after 0.2.0)
+
+The user asked for "Start a board" on the players' page, optionally behind a PIN, because
+events are sometimes run by a host who isn't staff.
+
+- Admin setting `newBoards`: `"staff"` (the default; no button), `"pin"` (the host PIN,
+  hashed like a board PIN in `settings.hostPin`, never sent out: the admin sees
+  `hostPinSet`), or `"open"`. `"pin"` with no PIN set behaves as `"staff"`.
+  `/api/config` carries the effective `newBoards`; `/api/me` carries `canCreate`.
+- `POST /api/host-login` (rate-limited like board PINs) gives a host token (`x-host`
+  header, `leaderboard_hostToken`), tied to the PIN's salt, so a new PIN signs hosts out.
+- A board started by a non-staff host gets a random 4-digit board PIN, and the response
+  carries `scorer: { token, pin }`: the host scores that board only, and the PIN is shown once
+  ("Got it") for a second phone. 12 boards per device per hour for non-staff.
+- The players' page links to `/host?new`, which opens the wizard (or the host-PIN form).
+- Fixed in the same change: the TV page never stopped `tableMode()`, so after Back inside
+  the app the pointer stayed hidden and the page stayed marked as a shared screen.
 
 **Not built** (only when asked): a host-run "reveal" mode, per-point live scoring, player
 accounts, images on participants, swiss format.

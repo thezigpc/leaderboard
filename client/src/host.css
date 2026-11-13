@@ -765,3 +765,19 @@ button.qa-add {
   justify-content: start;
   text-align: left;
 }
+
+/* "Running an event? + Start a board" on the players' page */
+.ph-start {
+  margin-top: 28px;
+  padding: 14px 16px;
+  border: 1px dashed var(--line, rgba(127, 127, 127, 0.35));
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.ph-start .button {
+  min-height: 44px;
+}
