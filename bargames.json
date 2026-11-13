@@ -1,0 +1,45 @@
+{
+  "id": "leaderboard",
+  "name": "Leaderboard",
+  "kind": "app",
+  "version": "0.1.0",
+  "image": "ghcr.io/thezigpc/leaderboard:0.1.0",
+  "port": 3008,
+  "sdk": {
+    "version": "0.11.5",
+    "level": 2
+  },
+  "routes": {
+    "player": "/",
+    "table": "/tv",
+    "host": "/host",
+    "admin": "/admin"
+  },
+  "routing": {
+    "basePath": true
+  },
+  "health": "/health",
+  "events": [
+    "board_started",
+    "result_recorded",
+    "leader_changed",
+    "board_finished",
+    "game_result"
+  ],
+  "commands": [],
+  "brandable": [
+    "displayName",
+    "tagline",
+    "accent"
+  ],
+  "resources": {
+    "memory": "256m",
+    "cpus": 1
+  },
+  "network": {
+    "internet": false
+  },
+  "env": {
+    "DATA_DIR": "/data"
+  }
+}
