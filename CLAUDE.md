@@ -5,7 +5,7 @@ standalone. The venue runs its own events: trivia nights, cornhole, pool, darts,
 The host keeps score from their phone, and the TVs and players' phones show standings and
 brackets live. Several boards can run at once, and each can be themed for its event.
 
-**Status: 0.1.0 built (2026-11-13).** All six formats, the host, TV, phone and admin pages,
+**Status: 0.2.0 released (2026-11-13): the phone-first setup below. 0.1.0 had** all six formats, the host, TV, phone and admin pages,
 and the box wiring. See "As built" at the end, [README.md](README.md) and
 [BARGAMES.md](BARGAMES.md). Keep this file up to date as decisions are made.
 
@@ -245,6 +245,37 @@ phone size, through the mock gateway too. Watch the mock's log for `✗` events.
 **Things that bit:** a TV camera that pans to the bottom of a bracket can't avoid slicing a
 card along its top edge, so such cards fade out (`offcam`). The mock box drops custom
 events without `x-`.
+
+## Building the list (2026-11-13, after 0.1.0; the user approved mockups 1–8)
+
+The host's setup was rebuilt for phones first. Mockups: https://claude.ai/artifact/T92bWJxyh6kRMTVzzkCKX8
+
+- **Tabs:** before the start, Entrants (or Teams) · Bracket (bracket formats) · Setup; once
+  live, Score · Entrants · Setup. The tab follows the status.
+- **New board** (`host/NewBoardWizard.tsx`): event tiles (`EVENTS` in `defaults.ts`: look, a
+  format, who plays), format cards with small pictures, Players / Pairs / Teams, the name.
+- **Who plays** is `board.entry` (`{ kind: "players" | "teams", size }`, size 2 = pairs).
+  Team boards keep players not on a team in `board.waiting` (names). Action `entry`; action
+  `arrange` sends all teams (by id; no id = new) and the waiting list at once: before the
+  start a team left out is removed, after it teams can't be removed and new ones only join
+  open formats. The client builds `arrange` and seed swaps from the latest board inside the
+  send queue (`run(view => action)` in `useActions`), so quick taps can't undo each other.
+- **Quick add** (`QuickAdd.tsx`): one field, Enter adds, keyboard stays; suggestions and
+  "Who's here tonight?" (`RegularsSheet.tsx`) come from `GET /api/people` (scorekeepers
+  only; `peopleSeen()` in `shared/people.ts`: names from started boards, matched by name).
+- **Teams** (`TeamsBoard.tsx`): tap a player, then a team (or another waiting player to pair
+  them); drag on wide screens (`useDrag` in `host/kit.tsx`, pointer events, ≥900 px).
+  **Blind draw** (`DrawSheet.tsx`): random teams of N, lockable, odd one out sits out or
+  joins, made-up names from `TEAM_NAMES` (original, generic).
+- **Paste** (`PastePanel.tsx`, beside the list on wide screens, a sheet on phones):
+  `readEntrants()` shows how it was read (skipped header, members after "Team:" lines or
+  "-" bullets, duplicates with Merge/Skip) before anything is added.
+- **Bracket tab** (`BracketSetup.tsx`): phone, round 1 as a list, tap two names to swap;
+  wide, the winners bracket drawn out plus a draggable seed list. A board copied from a
+  finished one (`board.copiedFrom`) warns when last time's finalists would meet before the
+  final (`meetingRound`, `apartSwap` in `bracket.ts`) and offers "Keep them apart".
+- Styles for all of this are in `client/src/host.css`. Tests: `shared/test/entrants.test.ts`
+  and the pairs/regulars test in `server/test/api.test.ts` (84 in all).
 
 **Not built** (only when asked): a host-run "reveal" mode, per-point live scoring, player
 accounts, images on participants, swiss format.

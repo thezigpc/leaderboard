@@ -8,6 +8,7 @@ import { PhoneBoard, PhoneHome } from "./pages/PhonePage";
 import { TvPage } from "./pages/TvPage";
 import { useVenue } from "./useVenue";
 import "./index.css";
+import "./host.css";
 
 /**
  * Bar Games: keeps the venue theme applied, and shows the staff's announcement at the top of

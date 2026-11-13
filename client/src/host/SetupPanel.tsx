@@ -420,6 +420,26 @@ export function SetupPanel({ view, run, staff, list, toast }: { view: BoardView;
         ) : (
           <p className="muted small">{FORMAT_NAMES[b.format]} (fixed once started)</p>
         )}
+        <div className="field">
+          <span>Who's playing</span>
+          <div className="seg" role="group" aria-label="Who's playing">
+            {(
+              [
+                ["players", 0, "Players"],
+                ["teams", 2, "Pairs"],
+                ["teams", 0, "Teams"],
+              ] as const
+            ).map(([kind, size, label]) => {
+              const on = b.entry?.kind === kind && (kind === "players" || (size === 2) === (b.entry.size === 2));
+              return (
+                <button key={label} className={on ? "on" : ""} aria-pressed={on} onClick={() => run({ type: "entry", kind, size })}>
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          {b.entry?.kind === "teams" && (b.waiting?.length ?? 0) > 0 && <small className="muted">{b.waiting.length} waiting for a team on the Teams tab.</small>}
+        </div>
         <FormatRules view={view} run={run} />
       </Section>
 

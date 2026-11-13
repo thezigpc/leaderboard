@@ -6,7 +6,7 @@
 // board whose PIN was entered.
 
 import { bgUrl } from "@bargames/sdk/client";
-import type { Action, AppSettings, BoardView, FormatId, TvSettings, WhoAmI } from "@leaderboard/shared";
+import type { Action, AppSettings, BoardView, FormatId, PeopleSeen, TvSettings, WhoAmI } from "@leaderboard/shared";
 
 const TOKEN_KEY = "leaderboard_adminToken";
 const SCORERS_KEY = "leaderboard_scorers";
@@ -113,8 +113,16 @@ export const api = {
   logout: () => request("POST", "/api/admin/logout", {}),
   me: () => request<WhoAmI>("GET", "/api/me"),
   board: (id: string) => request<BoardResponse>("GET", `/api/boards/${encodeURIComponent(id)}`),
-  create: (body: { title: string; format: FormatId; preset?: string; copyFrom?: string; keepEntrants?: boolean; seedFrom?: { boardId: string; top: number } }) =>
-    request<BoardView>("POST", "/api/boards", body),
+  create: (body: {
+    title: string;
+    format: FormatId;
+    preset?: string;
+    copyFrom?: string;
+    keepEntrants?: boolean;
+    seedFrom?: { boardId: string; top: number };
+    entry?: { kind: "players" | "teams"; size: number };
+  }) => request<BoardView>("POST", "/api/boards", body),
+  people: (exclude?: string) => request<PeopleSeen>("GET", `/api/people${exclude ? `?exclude=${encodeURIComponent(exclude)}` : ""}`),
   act: (id: string, version: number, action: Action) => request<BoardView>("POST", `/api/boards/${encodeURIComponent(id)}/actions`, { version, action }),
   undo: (id: string, version: number) => request<BoardView>("POST", `/api/boards/${encodeURIComponent(id)}/undo`, { version }),
   remove: (id: string) => request("DELETE", `/api/boards/${encodeURIComponent(id)}`),

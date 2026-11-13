@@ -144,6 +144,14 @@ export interface Theme {
   useVenue: boolean;
 }
 
+/** Who plays: single players, or teams (pairs when size is 2). Teams are participants with
+ * members; players not on a team yet wait on the board's `waiting` list. */
+export interface EntrySettings {
+  kind: "players" | "teams";
+  /** Players per team (0: any number). */
+  size: number;
+}
+
 export interface SeasonLink {
   /** Board ids summed into this one (points boards in "rounds" scoring only). */
   boards: string[];
@@ -167,6 +175,11 @@ export interface Board {
   startedAt?: number;
   finishedAt?: number;
   participants: Participant[];
+  entry: EntrySettings;
+  /** Team boards: players not on a team yet (names). Not shown to the public screens. */
+  waiting: string[];
+  /** The board this one was copied from (last week's), for "keep last week's finalists apart". */
+  copiedFrom?: string;
   /** Bracket seeding order (participant ids), and the ladder's starting order. */
   seeds: string[];
   /** Round robin groups (participant ids per group), fixed when the board starts. */

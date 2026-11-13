@@ -55,6 +55,35 @@ export const bracketSize = (n: number): number => {
   return s;
 };
 
+/** The winners-bracket round in which seeds a and b (1-based) would meet if both kept winning. */
+export function meetingRound(n: number, a: number, b: number): number {
+  const order = seedOrder(bracketSize(Math.max(2, n)));
+  const pa = order.indexOf(a);
+  const pb = order.indexOf(b);
+  let r = 1;
+  while (pa >> r !== pb >> r) r++;
+  return r;
+}
+
+/**
+ * Keeps seeds a and b apart until the final: the seed to swap b with, the closest seed in
+ * the other half of the bracket (never a bye, never a). Null when they're already apart.
+ */
+export function apartSwap(n: number, a: number, b: number): number | null {
+  const size = bracketSize(Math.max(2, n));
+  const rounds = Math.log2(size);
+  if (rounds < 2 || meetingRound(n, a, b) === rounds) return null;
+  const order = seedOrder(size);
+  const half = (s: number) => (order.indexOf(s) < size / 2 ? 0 : 1);
+  const other = 1 - half(a);
+  let best: number | null = null;
+  for (let s = 1; s <= n; s++) {
+    if (s === a || s === b || half(s) !== other) continue;
+    if (best === null || Math.abs(s - b) < Math.abs(best - b)) best = s;
+  }
+  return best;
+}
+
 const wId = (r: number, i: number) => `W${r}.${i}`;
 const lId = (r: number, i: number) => `L${r}.${i}`;
 

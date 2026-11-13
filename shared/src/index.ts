@@ -7,3 +7,4 @@ export * from "./actions.js";
 export * from "./season.js";
 export * from "./csv.js";
 export * from "./protocol.js";
+export * from "./people.js";

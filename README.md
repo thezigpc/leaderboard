@@ -17,6 +17,12 @@ It runs as an app on a Bar Games box, or by itself with `docker compose up`.
 | **Ladder** | A ranked list: beat someone above you (within reach) and take their place. |
 | **Best score / time** | One number per attempt (high score, fastest time); best attempt counts. |
 
+Setting up is made for a phone: pick the event and format from pictures; add players one
+name at a time (Enter adds the next), tick tonight's regulars from earlier boards, or paste
+a list and check how it was read. Pairs and teams are cards: tap a player, then their team,
+or let a blind draw make random teams. The bracket is the seeding screen: tap two names to
+swap them (or drag on an iPad), and it warns when last time's finalists would meet early.
+
 Every result can be changed or undone. Changing a bracket result that later matches were
 built on asks first, then re-flows the bracket. A no-show can be withdrawn: their remaining
 matches become walkovers. Matches can be put on lanes ("Board 2") and show as "up next".

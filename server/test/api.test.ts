@@ -1,7 +1,7 @@
 import { after, before, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { io as connect } from "socket.io-client";
-import type { BoardSummary, BoardView, DerivedMatch } from "@leaderboard/shared";
+import type { BoardSummary, BoardView, DerivedMatch, PeopleSeen } from "@leaderboard/shared";
 import { startApp, until, type TestApp } from "./helpers.js";
 
 const PNG = Buffer.from("89504e470d0a1a0a0000000d4948445200000001000000010806000000", "hex");
@@ -127,6 +127,36 @@ describe("boards and keeping score", () => {
     const ko = (await r.json()) as BoardView;
     assert.deepEqual(ko.board.participants.map((p) => p.name), ["A", "B"]);
     assert.equal(ko.board.settings.single.seeding, "board");
+  });
+
+  test("a pairs board, its teams and waiting players, and the regulars list", async () => {
+    const r = await t.send("POST", "/api/boards", { title: "Cornhole Doubles", format: "single", preset: "cornhole", entry: { kind: "teams", size: 2 } }, staff);
+    const v = (await r.json()) as BoardView;
+    assert.deepEqual(v.board.entry, { kind: "teams", size: 2 });
+    assert.deepEqual(v.board.waiting, []);
+    const a = await t.act(staff, v.board.id, { type: "arrange", teams: [{ name: "Bag Ladies", members: ["Mia", "Dee"] }, { name: "Corn Stars", members: ["Jo", "Kim"] }], waiting: ["Sam"] });
+    assert.equal(a.status, 200);
+    assert.deepEqual(a.body.board!.waiting, ["Sam"]);
+    await t.act(staff, v.board.id, { type: "start" });
+    // Drafts don't count as regulars; a started board does. Scorekeepers only.
+    assert.equal((await t.get("/api/people")).status, 401);
+    const people = (await (await fetch(`${t.url}/api/people`, { headers: staff })).json()) as PeopleSeen;
+    const team = people.teams.find((x) => x.name === "Bag Ladies")!;
+    assert.deepEqual(team.members, ["Mia", "Dee"]);
+    assert.ok(team.presets.includes("cornhole"));
+    assert.ok(people.players.some((p) => p.name === "Kim"));
+    assert.ok(!people.players.some((p) => p.name === "Sam"));
+    const without = (await (await fetch(`${t.url}/api/people?exclude=${v.board.id}`, { headers: staff })).json()) as PeopleSeen;
+    assert.ok(!without.teams.some((x) => x.name === "Bag Ladies"));
+    // A copy remembers where it came from (for "keep last week's finalists apart").
+    const c = await t.send("POST", "/api/boards", { title: "Next week", format: "single", copyFrom: v.board.id, keepEntrants: true }, staff);
+    const copy = (await c.json()) as BoardView;
+    assert.equal(copy.board.copiedFrom, v.board.id);
+    assert.deepEqual(copy.board.entry, { kind: "teams", size: 2 });
+    assert.deepEqual(copy.board.participants.map((p) => [p.name, p.members]), [
+      ["Bag Ladies", ["Mia", "Dee"]],
+      ["Corn Stars", ["Jo", "Kim"]],
+    ]);
   });
 
   test("deleting is staff only", async () => {

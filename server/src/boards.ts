@@ -10,6 +10,7 @@ import { log, type JsonStore } from "@bargames/gamekit/server";
 import {
   applyAction,
   derive,
+  entrantLine,
   LIMITS,
   newBoard,
   presetTheme,
@@ -136,6 +137,7 @@ export class BoardService {
     copyFrom?: string;
     keepEntrants?: boolean;
     seedFrom?: { boardId: string; top: number };
+    entry?: { kind: "players" | "teams"; size?: number };
   }): Promise<ApplyOutcome> {
     if (this.boards.size >= LIMITS.boards) return { ok: false, status: 400, error: `There are ${LIMITS.boards} boards already. Delete some old ones in Admin first.` };
     const now = this.now();
@@ -153,14 +155,28 @@ export class BoardService {
     if (input.copyFrom && !src) return { ok: false, status: 404, error: "That board is gone." };
     if (src) {
       // A template: same format, settings, look and lanes; optionally the same entrants.
-      b = { ...b, format: src.format, subtitle: src.subtitle, kind: src.kind, settings: structuredClone(src.settings), theme: structuredClone(src.theme), lanes: [...src.lanes] };
+      b = {
+        ...b,
+        format: src.format,
+        subtitle: src.subtitle,
+        kind: src.kind,
+        settings: structuredClone(src.settings),
+        theme: structuredClone(src.theme),
+        lanes: [...src.lanes],
+        entry: { ...src.entry },
+        copiedFrom: src.id,
+      };
       if (src.season) b.season = structuredClone(src.season);
       if (input.keepEntrants && src.participants.length) {
-        const fail = step({ type: "addParticipants", names: [src.participants.filter((p) => !p.withdrawn).map((p) => (p.members?.length ? `${p.name}: ${p.members.join(", ")}` : p.name)).join("\n")] });
+        const fail = step({ type: "addParticipants", names: [src.participants.filter((p) => !p.withdrawn).map(entrantLine).join("\n")] });
         if (fail) return fail;
       }
     } else if (input.preset) {
       b.theme = presetTheme(input.preset);
+    }
+    if (input.entry && !src) {
+      const fail = step({ type: "entry", kind: input.entry.kind, size: input.entry.size });
+      if (fail) return fail;
     }
     if (input.seedFrom) {
       const from = this.boards.get(input.seedFrom.boardId);

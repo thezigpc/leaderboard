@@ -3,18 +3,22 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { FORMAT_HINTS, FORMAT_NAMES, PRESETS, presetFor, type BoardSummary, type BoardView, type FormatId, type WhoAmI } from "@leaderboard/shared";
+import { FORMAT_NAMES, type BoardSummary, type BoardView, type WhoAmI } from "@leaderboard/shared";
 import { api, ApiError, scorerTokens, setScorerToken, setToken, type AuthStatus } from "../api";
 import { useBoard, useBoardList, useConfig, useTvSettings } from "../live";
 import { AuthForm, quietSignIn } from "../ui/AuthForm";
 import { since } from "../ui/format";
 import { BoardTitle, Themed } from "../ui/Theme";
+import { BracketSetup } from "../host/BracketSetup";
 import { EntrantsPanel } from "../host/EntrantsPanel";
+import { useWide } from "../host/kit";
+import { NewBoardWizard } from "../host/NewBoardWizard";
 import { ScorePanel } from "../host/ScorePanel";
 import { SetupPanel } from "../host/SetupPanel";
 import { useActions } from "../host/useActions";
 
 type Toast = { text: string; error: boolean } | null;
+type Tab = "score" | "entrants" | "bracket" | "setup";
 
 function useToast(): [Toast, (text: string, error?: boolean) => void] {
   const [t, setT] = useState<Toast>(null);
@@ -102,66 +106,6 @@ function PinSignIn({ boards, onDone }: { boards: BoardSummary[]; onDone: (id: st
   );
 }
 
-function NewBoard({ onCreated }: { onCreated: (id: string) => void }) {
-  const [title, setTitle] = useState("");
-  const [format, setFormat] = useState<FormatId>("points");
-  const [preset, setPreset] = useState(presetFor("points"));
-  const [err, setErr] = useState("");
-  const [busy, setBusy] = useState(false);
-  return (
-    <form
-      className="card new-board"
-      onSubmit={async (e) => {
-        e.preventDefault();
-        setBusy(true);
-        try {
-          const v = await api.create({ title, format, preset });
-          onCreated(v.board.id);
-        } catch (error) {
-          setErr(error instanceof Error ? error.message : "That didn't work.");
-          setBusy(false);
-        }
-      }}
-    >
-      <h2>New board</h2>
-      <label>
-        Name
-        <input value={title} maxLength={60} onChange={(e) => setTitle(e.target.value)} placeholder="Trivia Night" required />
-      </label>
-      <div className="format-pick">
-        {(Object.keys(FORMAT_NAMES) as FormatId[]).map((f) => (
-          <button
-            type="button"
-            key={f}
-            className={format === f ? "on" : ""}
-            onClick={() => {
-              setFormat(f);
-              setPreset(presetFor(f));
-            }}
-          >
-            <b>{FORMAT_NAMES[f]}</b>
-            <small>{FORMAT_HINTS[f]}</small>
-          </button>
-        ))}
-      </div>
-      <label>
-        Look
-        <select value={preset} onChange={(e) => setPreset(e.target.value)}>
-          {PRESETS.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.theme.emoji} {p.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      {err && <p className="error">{err}</p>}
-      <button className="primary wide" disabled={busy || !title.trim()}>
-        Create
-      </button>
-    </form>
-  );
-}
-
 function BoardRow({ b }: { b: BoardSummary }) {
   return (
     <Link to={`/host/${b.id}`} className="host-row">
@@ -205,7 +149,7 @@ function HostHome({ who, status, refresh }: { who: WhoAmI; status: AuthStatus; r
       </header>
       {who.staff ? (
         <>
-          {creating ? <NewBoard onCreated={(id) => nav(`/host/${id}`)} /> : (
+          {creating ? <NewBoardWizard onCreated={(id) => nav(`/host/${id}`)} onCancel={() => setCreating(false)} /> : (
             <button className="primary wide big" onClick={() => setCreating(true)}>
               + New board
             </button>
@@ -361,7 +305,8 @@ function HostBoard({ id, who, onAuthLost }: { id: string; who: WhoAmI; onAuthLos
   const list = useBoardList() ?? [];
   const cfg = useConfig();
   const [toast, showToast] = useToast();
-  const [tab, setTab] = useState<"score" | "entrants" | "setup">("score");
+  const [tab, setTab] = useState<Tab | null>(null);
+  const wide = useWide();
   const [canUndo, setCanUndo] = useState(false);
   const view = s.status === "ready" ? s.view : null;
   const setView = useCallback(
@@ -381,11 +326,11 @@ function HostBoard({ id, who, onAuthLost }: { id: string; who: WhoAmI; onAuthLos
   useEffect(() => {
     void api.board(id).then((r) => setCanUndo(!!r.canUndo), () => undefined);
   }, [id]);
-  // A new board with nobody on it starts on the Entrants tab.
-  const empty = view ? view.board.participants.length === 0 : false;
+  // Before the start: Entrants first; once it's running: Score. Switches when it starts.
+  const status = view?.board.status;
   useEffect(() => {
-    if (empty) setTab("entrants");
-  }, [empty]);
+    if (status) setTab(status === "draft" ? "entrants" : "score");
+  }, [status]);
 
   if (s.status === "loading") return <p className="muted center pad">Loading…</p>;
   if (!view)
@@ -403,8 +348,11 @@ function HostBoard({ id, who, onAuthLost }: { id: string; who: WhoAmI; onAuthLos
       </div>
     );
   const b = view.board;
+  const draft = b.status === "draft";
+  const tabs: Tab[] = draft ? ["entrants", ...(b.format === "single" || b.format === "double" ? (["bracket"] as Tab[]) : []), "setup"] : ["score", "entrants", "setup"];
+  const shown: Tab = tab && tabs.includes(tab) ? tab : tabs[0];
   return (
-    <Themed theme={b.theme} className="host host-board">
+    <Themed theme={b.theme} className={`host host-board ${wide && (shown === "entrants" || shown === "bracket") ? "wide" : ""}`}>
       <header className="hb-top">
         <Link to="/host" className="back">
           ←
@@ -426,15 +374,16 @@ function HostBoard({ id, who, onAuthLost }: { id: string; who: WhoAmI; onAuthLos
         {b.status === "finished" && b.winners?.length ? <> 🏆 {b.winners.join(" & ")}</> : null}
       </p>
       <nav className="tabs">
-        {(["score", "entrants", "setup"] as const).map((t) => (
-          <button key={t} className={tab === t ? "on" : ""} onClick={() => setTab(t)}>
-            {t === "score" ? "Score" : t === "entrants" ? `Entrants (${b.participants.filter((p) => !p.withdrawn).length})` : "Setup"}
+        {tabs.map((t) => (
+          <button key={t} className={shown === t ? "on" : ""} onClick={() => setTab(t)}>
+            {t === "score" ? "Score" : t === "bracket" ? "Bracket" : t === "entrants" ? `${b.entry?.kind === "teams" ? "Teams" : "Entrants"} (${b.participants.filter((p) => !p.withdrawn).length})` : "Setup"}
           </button>
         ))}
       </nav>
-      {tab === "score" && <ScorePanel view={view} run={run} />}
-      {tab === "entrants" && <EntrantsPanel view={view} run={run} />}
-      {tab === "setup" && <SetupPanel view={view} run={run} staff={who.staff} list={list} toast={showToast} />}
+      {shown === "score" && <ScorePanel view={view} run={run} />}
+      {shown === "entrants" && <EntrantsPanel view={view} run={run} wide={wide} onNext={() => setTab("bracket")} />}
+      {shown === "bracket" && <BracketSetup view={view} run={run} wide={wide} onStarted={() => setTab("score")} />}
+      {shown === "setup" && <SetupPanel view={view} run={run} staff={who.staff} list={list} toast={showToast} />}
       <div className="hb-extras">
         <TvControl list={list} staff={who.staff} boardId={b.status !== "draft" ? b.id : undefined} />
         {cfg?.onBox && <Countdown toast={showToast} />}

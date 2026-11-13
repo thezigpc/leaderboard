@@ -30,6 +30,7 @@ import {
   DEFAULT_APP_SETTINGS,
   DEFAULT_NAME,
   mergeTheme,
+  peopleSeen,
   presetTheme,
   type Action,
   type AppSettings,
@@ -249,6 +250,15 @@ export async function createApp(o: AppOptions): Promise<LeaderboardApp> {
     res.json(body);
   });
 
+  // Regulars from earlier boards (names only), for the host's "who's here tonight" and the
+  // quick-add suggestions. Scorekeepers only: it's a list of everyone who has played.
+  app.get("/api/people", (req, res) => {
+    if (!isStaff(req) && !scorerBoards(req).length) return void res.status(401).json({ ok: false, error: "Sign in first." });
+    const exclude = typeof req.query.exclude === "string" ? req.query.exclude : undefined;
+    res.set("Cache-Control", "no-store");
+    res.json(peopleSeen(boards.all(), exclude));
+  });
+
   const send = (res: Response, r: ApplyOutcome) => {
     if (r.ok) return void res.json({ ok: true, ...r.view });
     res.status(r.status).json({ ok: false, error: r.error, code: r.code, affected: r.affected, view: r.view });
@@ -271,6 +281,10 @@ export async function createApp(o: AppOptions): Promise<LeaderboardApp> {
           copyFrom: validBoardId(body.copyFrom) ? body.copyFrom : undefined,
           keepEntrants: body.keepEntrants === true,
           seedFrom: seedFrom && validBoardId(seedFrom.boardId) ? seedFrom : undefined,
+          entry:
+            body.entry && typeof body.entry === "object"
+              ? { kind: (body.entry as { kind?: unknown }).kind === "teams" ? "teams" : "players", size: Number((body.entry as { size?: unknown }).size) || 0 }
+              : undefined,
         }),
       );
     }),

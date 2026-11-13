@@ -34,6 +34,8 @@ export type Action =
   | { type: "editParticipant"; id: string; name?: string; members?: string[] }
   | { type: "removeParticipant"; id: string }
   | { type: "restoreParticipant"; id: string }
+  | { type: "entry"; kind: "players" | "teams"; size?: number }
+  | { type: "arrange"; teams: { id?: string; name: string; members: string[] }[]; waiting: string[] }
   | { type: "seeds"; ids: string[] }
   | { type: "shuffle" }
   | { type: "start" }
@@ -208,29 +210,73 @@ export function cleanSeason(v: unknown, selfId: string): SeasonLink | undefined 
   return { boards, scoring: pick(o.scoring, ["placement", "total"] as const, "placement"), placePoints };
 }
 
+export interface ReadEntrant {
+  name: string;
+  members?: string[];
+  /** 1-based line the entrant starts on. */
+  line: number;
+}
+
 /**
- * Pasted text or a CSV → entrants. One per line. "Team: a, b" or a spreadsheet row
- * "Team,a,b" gives a team with members. A first row that's a header ("Name", "Team",
- * "Player") is skipped.
+ * Pasted text or a CSV → entrants, with what was skipped (for the "we read it as" preview).
+ * One per line. "Team: a, b" or a spreadsheet row "Team,a,b" gives a team with members, and
+ * so do the lines under "Team:" (a line ending with a colon) and lines starting with "-" or
+ * "•" under a team's line. A first row that's a header ("Name", "Team", "Player") is skipped.
  */
-export function parseEntrants(text: string): { name: string; members?: string[] }[] {
-  return text
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      // CSV-ish: "name,member,member" from a spreadsheet; or "Team: a, b".
-      const colon = line.indexOf(":");
-      if (colon > 0) {
-        const members = line.slice(colon + 1).split(/[,;]/).map((m) => cleanName(m)).filter(Boolean).slice(0, LIMITS.members);
-        return members.length ? { name: cleanName(line.slice(0, colon)), members } : { name: cleanName(line.slice(0, colon)) };
-      }
+export function readEntrants(text: string): { entrants: ReadEntrant[]; header: boolean } {
+  const out: ReadEntrant[] = [];
+  let header = false;
+  let first = true;
+  // After "Team:" the following indented lines are its members.
+  let open = false;
+  const lines = text.split(/\r?\n/);
+  lines.forEach((raw, i) => {
+    const line = raw.trim();
+    if (!line) {
+      open = false;
+      return;
+    }
+    const bullet = /^\s*[-•*]\s*\S/.test(raw);
+    const member = out.length > 0 && (bullet || (open && /^\s/.test(raw)));
+    if (member) {
+      const m = cleanName(line.replace(/^[-•*]\s*/, ""));
+      const team = out[out.length - 1];
+      if (m && (team.members?.length ?? 0) < LIMITS.members) team.members = [...(team.members ?? []), m];
+      return;
+    }
+    let e: ReadEntrant;
+    const colon = line.indexOf(":");
+    open = colon > 0 && colon === line.length - 1;
+    if (colon > 0) {
+      const members = line.slice(colon + 1).split(/[,;]/).map((m) => cleanName(m)).filter(Boolean).slice(0, LIMITS.members);
+      e = { name: cleanName(line.slice(0, colon)), line: i + 1 };
+      if (members.length) e.members = members;
+    } else {
+      // CSV-ish: "name,member,member" from a spreadsheet.
       const cells = line.split(/\t|;|,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map((c) => cleanName(c.replace(/^"|"$/g, "").replace(/""/g, '"')));
       const members = cells.slice(1).filter(Boolean).slice(0, LIMITS.members);
-      return members.length ? { name: cells[0], members } : { name: cells[0] };
-    })
-    .filter((e, i) => e.name && !(i === 0 && /^(name|names|team|teams|player|players)$/i.test(e.name)));
+      e = { name: cells[0], line: i + 1 };
+      if (members.length) e.members = members;
+    }
+    if (first && /^(name|names|team|teams|team name|player|players)$/i.test(e.name)) {
+      header = true;
+      first = false;
+      return;
+    }
+    first = false;
+    if (e.name) out.push(e);
+  });
+  return { entrants: out, header };
 }
+
+/** Pasted text or a CSV → entrants (see readEntrants). */
+export function parseEntrants(text: string): { name: string; members?: string[] }[] {
+  return readEntrants(text).entrants.map(({ name, members }) => (members ? { name, members } : { name }));
+}
+
+/** An entrant as a line parseEntrants reads back ("Team: a, b"). */
+export const entrantLine = (e: { name: string; members?: string[] }): string =>
+  e.members?.length ? `${e.name.replace(/:/g, " ")}: ${e.members.join(", ")}` : e.name.replace(/:/g, " ");
 
 // ----------------------------------------------------------------- the reducer
 
@@ -308,6 +354,9 @@ function reduce(b: Board, a: Action, env: ActionEnv): Inner {
         b.participants.push(p);
         b.seeds.push(p.id);
       }
+      // Players who were waiting for a team and just came in on one stop waiting.
+      const joined = new Set(entries.flatMap((e) => e.members ?? []).map((m) => m.toLowerCase()));
+      if (joined.size) b.waiting = b.waiting.filter((w) => !joined.has(w.toLowerCase()));
       return OK;
     }
     case "editParticipant": {
@@ -350,6 +399,12 @@ function reduce(b: Board, a: Action, env: ActionEnv): Inner {
       for (const id of staleResults(b)) delete b.results[id];
       return OK;
     }
+    case "entry": {
+      b.entry = { kind: a.kind === "teams" ? "teams" : "players", size: a.kind === "teams" ? int(a.size, 0, LIMITS.members, 0) : 0 };
+      return OK;
+    }
+    case "arrange":
+      return arrange(b, a, env);
     case "seeds": {
       if (!draft) return fail("Seeding is fixed once the board starts.", "STATE");
       const ids = Array.isArray(a.ids) ? a.ids.filter((id) => participant(b, id)) : [];
@@ -530,6 +585,71 @@ function reduce(b: Board, a: Action, env: ActionEnv): Inner {
     default:
       return fail("That isn't something this board can do.");
   }
+}
+
+/**
+ * Teams and the players waiting for one, all at once (the team cards, a blind draw).
+ * Existing teams keep their id (so results stay with them); a team without an id is new.
+ * Before the start a team left out is removed; after it, every team must stay (withdraw
+ * instead), and new teams only join formats that take late entries.
+ */
+function arrange(b: Board, a: Extract<Action, { type: "arrange" }>, env: ActionEnv): Inner {
+  const draft = b.status === "draft";
+  const teams = Array.isArray(a.teams) ? a.teams : [];
+  const waitingIn = Array.isArray(a.waiting) ? a.waiting : [];
+  const max = b.format === "double" ? MAX_DOUBLE : b.format === "single" ? MAX_SINGLE : LIMITS.participants;
+  if (teams.length > max) return fail(`Up to ${max} entrants on this board.`);
+  if (waitingIn.length > LIMITS.participants * 2) return fail("That's too many players waiting.");
+  const names = new Set<string>();
+  const people = new Set<string>();
+  const person = (raw: unknown): string | null => {
+    const n = cleanName(raw);
+    if (!n) return null;
+    if (people.has(n.toLowerCase())) throw new Error(`${n} is listed twice.`);
+    people.add(n.toLowerCase());
+    return n;
+  };
+  const byId = new Map(b.participants.map((p) => [p.id, p]));
+  const next: Participant[] = [];
+  const seen = new Set<string>();
+  let waiting: string[] = [];
+  try {
+    for (const t of teams) {
+      const o = obj(t);
+      const name = cleanName(o.name);
+      if (!name) return fail("Every team needs a name.");
+      if (names.has(name.toLowerCase())) return fail(`There are two teams called ${name}.`);
+      names.add(name.toLowerCase());
+      const members = (Array.isArray(o.members) ? o.members : []).map(person).filter((m): m is string => !!m);
+      if (members.length > LIMITS.members) return fail(`A team can have up to ${LIMITS.members} players.`);
+      const old = typeof o.id === "string" ? byId.get(o.id) : undefined;
+      if (typeof o.id === "string" && !old) return fail("A team on this list was removed meanwhile. Reload and try again.", "NOT_FOUND");
+      if (old && seen.has(old.id)) return fail("A team is listed twice.");
+      const p: Participant = old ? { ...old, name } : { id: env.newId(), name };
+      if (members.length) p.members = members;
+      else delete p.members;
+      if (old) seen.add(old.id);
+      next.push(p);
+    }
+    waiting = waitingIn.map(person).filter((m): m is string => !!m);
+  } catch (err) {
+    return fail(err instanceof Error ? err.message : "Someone is listed twice.");
+  }
+  const added = next.filter((p) => !byId.has(p.id));
+  const removed = b.participants.filter((p) => !seen.has(p.id));
+  if (!draft) {
+    if (removed.length) return fail("Teams can't be removed once the board starts. Withdraw them instead.", "STATE");
+    if (added.length && lockedEntries(b)) return fail("Entries are closed once a bracket or schedule starts.", "STATE");
+  }
+  b.participants = next;
+  for (const p of removed) {
+    delete b.scores[p.id];
+    b.attempts = b.attempts.filter((x) => x.pid !== p.id);
+  }
+  const gone = new Set(removed.map((p) => p.id));
+  b.seeds = [...b.seeds.filter((id) => !gone.has(id)), ...added.map((p) => p.id)];
+  b.waiting = waiting;
+  return OK;
 }
 
 function recordResult(b: Board, a: Extract<Action, { type: "result" }>, env: ActionEnv): Inner {

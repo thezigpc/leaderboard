@@ -7,9 +7,15 @@ import { useCallback, useRef } from "react";
 import type { Action, BoardView } from "@leaderboard/shared";
 import { api, ApiError } from "../api";
 
+/** An action, or a function that builds it from the latest board when its turn comes (team
+ * cards and seed swaps send whole lists, which must start from what's on the board now). */
+export type ActionInput = Action | ((view: BoardView) => Action | null);
+
 export interface Runner {
-  run(action: Action, opts?: { quiet?: boolean }): Promise<boolean>;
+  run(action: ActionInput, opts?: { quiet?: boolean }): Promise<boolean>;
   undo(): Promise<boolean>;
+  /** The latest board this runner knows. */
+  latest(): BoardView | null;
 }
 
 export function useActions(view: BoardView | null, setView: (v: BoardView) => void, toast: (text: string, error?: boolean) => void, onAuthLost: () => void): Runner {
@@ -48,10 +54,12 @@ export function useActions(view: BoardView | null, setView: (v: BoardView) => vo
   );
 
   const run = useCallback(
-    (action: Action): Promise<boolean> => {
+    (input: ActionInput): Promise<boolean> => {
       const p = queue.current.then(async () => {
         const v = latest.current;
         if (!v) return false;
+        const action = typeof input === "function" ? input(v) : input;
+        if (!action) return false;
         try {
           const next = await api.act(v.board.id, v.board.version, action);
           latest.current = next;
@@ -79,5 +87,6 @@ export function useActions(view: BoardView | null, setView: (v: BoardView) => vo
     return p;
   }, [send]);
 
-  return { run, undo };
+  const getLatest = useCallback(() => latest.current, []);
+  return { run, undo, latest: getLatest };
 }

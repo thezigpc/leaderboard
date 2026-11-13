@@ -115,6 +115,26 @@ export function presetTheme(id: string): Theme {
   return { preset: p.id, ...structuredClone(p.theme) };
 }
 
+/** The new-board picker: each event starts with a look, a format and who plays. */
+export const EVENTS: { preset: string; name: string; title: string; format: FormatId; entry: "players" | "pairs" | "teams" }[] = [
+  { preset: "trivia", name: "Trivia", title: "Trivia Night", format: "points", entry: "teams" },
+  { preset: "cornhole", name: "Cornhole", title: "Cornhole", format: "single", entry: "pairs" },
+  { preset: "pool", name: "Pool", title: "Pool", format: "single", entry: "players" },
+  { preset: "darts", name: "Darts", title: "Darts", format: "best", entry: "players" },
+  { preset: "holiday", name: "Holiday", title: "Holiday Party", format: "points", entry: "teams" },
+  { preset: "final", name: "Final", title: "Tournament Final", format: "single", entry: "players" },
+  { preset: "classic", name: "Other", title: "", format: "points", entry: "players" },
+];
+
+/** Made-up team names for a blind draw. Original, generic bar-night phrases. */
+export const TEAM_NAMES = [
+  "Night Owls", "Long Shots", "Top Shelf", "Last Call", "Table Turners", "Sharp Shooters", "Wild Cards", "Dark Horses",
+  "Underdogs", "High Rollers", "Hot Streak", "Front Runners", "Late Bloomers", "Second Wind", "Big Shots", "Lucky Breaks",
+  "Slow Starters", "Happy Accidents", "Close Calls", "Full House", "Bar Flies", "Free Throws", "Home Team", "Rookies",
+  "Old Pros", "Comeback Kids", "Fair Play", "Good Sports", "Quick Draws", "Steady Hands", "Long Pours", "Tall Orders",
+  "Odd Socks", "Pocket Change", "Snack Break", "Tab Openers", "Chalk Dust", "Corner Pocket", "Bullseyes", "Bean Counters",
+];
+
 /** A sensible preset for a new board of this format. */
 export const presetFor = (format: FormatId): string => (format === "points" ? "trivia" : format === "best" ? "darts" : "classic");
 
@@ -130,6 +150,8 @@ export function newBoard(id: string, title: string, format: FormatId, now: numbe
     createdAt: now,
     updatedAt: now,
     participants: [],
+    entry: { kind: "players", size: 0 },
+    waiting: [],
     seeds: [],
     settings: defaultSettings(),
     results: {},
