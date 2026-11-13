@@ -5,7 +5,7 @@ standalone. The venue runs its own events: trivia nights, cornhole, pool, darts,
 The host keeps score from their phone, and the TVs and players' phones show standings and
 brackets live. Several boards can run at once, and each can be themed for its event.
 
-**Status: 0.3.0 released (2026-11-13): hosts who aren't staff can start boards, and the TV cursor fix (below). 0.2.0: the phone-first setup. 0.1.0 had** all six formats, the host, TV, phone and admin pages,
+**Status: 0.3.1 (SDK 0.13.0, no feature changes). 0.3.0 released (2026-11-13): hosts who aren't staff can start boards, and the TV cursor fix (below). 0.2.0: the phone-first setup. 0.1.0 had** all six formats, the host, TV, phone and admin pages,
 and the box wiring. See "As built" at the end, [README.md](README.md) and
 [BARGAMES.md](BARGAMES.md). Keep this file up to date as decisions are made.
 
@@ -93,7 +93,7 @@ The box, its SDK and the shared game kit are the user's other projects:
   phone page, settings, the same kind of package as this one) and
   `C:\CodeProjects\BuzzBoard` / `C:\CodeProjects\BingoDigitalGame` (the same stack, kit
   usage, tests and release flow). Read their `CLAUDE.md` and `BARGAMES.md`.
-- Vendored here: `vendor/bargames-sdk-0.11.5.tgz`, `vendor/bargames-gamekit-0.7.2.tgz`
+- Vendored here: `vendor/bargames-sdk-0.13.0.tgz`, `vendor/bargames-gamekit-0.7.2.tgz`
   (install as file dependencies, as Bingo does).
 
 ### This is an app (`"kind": "app"`)
