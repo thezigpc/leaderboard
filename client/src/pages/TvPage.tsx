@@ -6,8 +6,8 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { VenueAnnouncement } from "@bargames/gamekit/client";
-import { isOnBox, joinUrl, tableMode, type TableModeController } from "@bargames/sdk/client";
+import { JoinAddress, VenueAnnouncement } from "@bargames/gamekit/client";
+import { isOnBox, joinDisplay, tableMode, type TableModeController } from "@bargames/sdk/client";
 import { bgUrl } from "@bargames/sdk/client";
 import { groupName, leaders, type BoardSummary, type BoardView, type StandingRow } from "@leaderboard/shared";
 import { getSocket, useBoardList, useBoards, useConfig, useTvSettings } from "../live";
@@ -81,7 +81,10 @@ function PagedTable({ view, rows, title }: { view: BoardView; rows: StandingRow[
   );
 }
 
-function SidePanel({ view, qr }: { view: BoardView; qr: string | null }) {
+/** The follow-along QR: `url` opens this board, `short` is the app's address to print. */
+type Join = { url: string; short: string };
+
+function SidePanel({ view, qr }: { view: BoardView; qr: Join | null }) {
   const names = useMemo(() => namesOf(view.board), [view.board]);
   const d = view.derived;
   const next = d.upNext.slice(0, 4);
@@ -128,11 +131,8 @@ function SidePanel({ view, qr }: { view: BoardView; qr: string | null }) {
       </div>
       {qr && (
         <section className="tv-qr">
-          <Qr text={qr} size={170} />
-          <p>
-            Follow along
-            <small>{qr.replace(/^https?:\/\//, "")}</small>
-          </p>
+          <Qr text={qr.url} size={170} />
+          <JoinAddress url={qr.short} label="Follow along at" />
         </section>
       )}
     </aside>
@@ -158,7 +158,7 @@ function useLeaderFlash(view: BoardView): string | null {
   return shown;
 }
 
-function TvBoard({ view, qr }: { view: BoardView; qr: string | null }) {
+function TvBoard({ view, qr }: { view: BoardView; qr: Join | null }) {
   const b = view.board;
   const d = view.derived;
   const leader = useLeaderFlash(view);
@@ -300,7 +300,9 @@ export function TvPage() {
   const shown = ids.length ? boards.get(ids[idx % ids.length]) : undefined;
   const view = shown?.status === "ready" ? shown.view : null;
   const qrOn = tv?.showQr ?? true;
-  const qr = view && qrOn ? joinUrl(isOnBox(venue) ? venue : null, `/b/${view.board.id}`) : null;
+  // The QR opens this board; the printed address is the app's (its list of live boards),
+  // wrapped and shrunk by the kit so a long venue address never runs out of its box.
+  const qr = view && qrOn ? joinDisplay(isOnBox(venue) ? venue : null, `/b/${view.board.id}`) : null;
   return (
     <div className="tv">
       <VenueAnnouncement ctx={venue} />

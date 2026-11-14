@@ -1195,6 +1195,43 @@ label.check {
 .tv-side .ml-label {
   font-size: 1.8vh;
 }
+/* A portrait TV: the layout above sizes by height, which only suits landscape. Here the
+   title sizes by width and the side panel (up next, results, QR) goes under the board. */
+@media (orientation: portrait) {
+  .tv-head .board-title h1 {
+    font-size: 6.5vw;
+    white-space: normal;
+  }
+  .tv-head .board-title.long h1 {
+    font-size: 5vw;
+  }
+  .tv-body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+  .tv-side {
+    flex-direction: row;
+    align-items: flex-end;
+    max-height: 32vh;
+    gap: 3vw;
+  }
+  .tv-side-lists {
+    align-self: stretch;
+  }
+  .tv-qr {
+    max-width: 46vw;
+    flex-direction: column;
+    text-align: center;
+  }
+  .tv-qr .qr {
+    width: 12vh;
+    height: 12vh;
+  }
+  .tv-qr .bargames-join {
+    flex: none;
+    width: 100%;
+  }
+}
 .tv-qr {
   flex-shrink: 0;
   display: flex;
@@ -1210,22 +1247,24 @@ label.check {
   border-radius: 0.8vh;
   background: #fff;
 }
-.tv-qr p {
-  margin: 0;
+/* GameKit's <JoinAddress>: breaks after "." and "/" and shrinks long addresses itself; the
+   box keeps the side panel's width. */
+.tv-qr .bargames-join {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  gap: 0.3vh;
+  /* The kit shrinks long addresses from this (down to 0.6 of it): 3vh keeps a 40-odd
+     character address about as big as the old one-line link, on two or three lines. */
+  font-size: 3vh;
+  line-height: 1.2;
+}
+.tv-qr .bargames-join-label {
   font-size: 2.6vh;
   font-weight: 700;
-  display: grid;
 }
-.tv-qr p {
-  min-width: 0;
-}
-.tv-qr small {
-  font-size: 1.8vh;
-  font-weight: 400;
-  opacity: 0.8;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.tv-qr .bargames-join-address {
+  opacity: 0.85;
 }
 .tv-toast {
   position: absolute;
