@@ -1227,9 +1227,15 @@ label.check {
     width: 12vh;
     height: 12vh;
   }
-  .tv-qr .bargames-join {
+  /* vh is tall here: at the landscape size a long address grows the box past the side
+     panel's height and slices the QR. */
+  .tv-side .tv-qr .bargames-join {
     flex: none;
     width: 100%;
+    font-size: 2vh;
+  }
+  .tv-side .tv-qr .bargames-join-label {
+    font-size: 2vh;
   }
 }
 .tv-qr {
@@ -1254,9 +1260,8 @@ label.check {
   flex: 1;
   display: grid;
   gap: 0.3vh;
-  /* The kit shrinks long addresses from this (down to 0.6 of it): 3vh keeps a 40-odd
-     character address about as big as the old one-line link, on two or three lines. */
-  font-size: 3vh;
+  /* The kit wraps the address onto up to three lines (lines={3}) before shrinking it. */
+  font-size: 2.6vh;
   line-height: 1.2;
 }
 .tv-qr .bargames-join-label {

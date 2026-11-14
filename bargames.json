@@ -2,11 +2,11 @@
   "id": "leaderboard",
   "name": "Leaderboard",
   "kind": "app",
-  "version": "0.3.2",
-  "image": "ghcr.io/thezigpc/leaderboard:0.3.2",
+  "version": "0.3.3",
+  "image": "ghcr.io/thezigpc/leaderboard:0.3.3",
   "port": 3008,
   "sdk": {
-    "version": "0.13.1",
+    "version": "0.13.2",
     "level": 2
   },
   "routes": {

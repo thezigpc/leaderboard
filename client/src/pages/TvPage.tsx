@@ -132,7 +132,9 @@ function SidePanel({ view, qr }: { view: BoardView; qr: Join | null }) {
       {qr && (
         <section className="tv-qr">
           <Qr text={qr.url} size={170} />
-          <JoinAddress url={qr.short} label="Follow along at" />
+          {/* Room for three lines before the kit shrinks it, and never below 0.8 of the base:
+              on a TV a long address wraps rather than turning small. */}
+          <JoinAddress url={qr.short} label="Follow along at" lines={3} minScale={0.8} />
         </section>
       )}
     </aside>
