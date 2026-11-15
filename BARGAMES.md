@@ -1,6 +1,6 @@
 # Bar Games integration: Leaderboard (app)
 
-**`kind: "app"`, sdk.level 2, SDK 0.13.2, game kit 0.7.4.** No rooms. What it takes from
+**`kind: "app"`, sdk.level 2, SDK 0.14.0, game kit 0.8.0.** No rooms. What it takes from
 the box: the venue's name, theme and address, staff sign-in, announcements. What it gives
 the box: events, finished boards' results, a countdown, and "needs attention" items.
 
