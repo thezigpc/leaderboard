@@ -47,7 +47,7 @@ export interface CustomPreset {
 }
 
 export interface AppSettings {
-  /** Standalone display name ("" = GAME_NAME or "Leaderboard"). */
+  /** Standalone display name ("" = GAME_NAME or "Tournament & Leaderboard"). */
   name: string;
   tv: TvSettings;
   /** A called match with no result after this many minutes asks staff to look (0 = never). */

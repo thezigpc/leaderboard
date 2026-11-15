@@ -24,7 +24,7 @@ function Settings({ s, save }: { s: AdminSettings; save: (p: AdminSettingsPatch)
       ) : (
         <label>
           Name on the pages
-          <input value={name} maxLength={60} placeholder="Leaderboard" onChange={(e) => setName(e.target.value)} onBlur={() => name !== s.name && save({ name })} />
+          <input value={name} maxLength={60} placeholder="Tournament & Leaderboard" onChange={(e) => setName(e.target.value)} onBlur={() => name !== s.name && save({ name })} />
         </label>
       )}
       <label className="inline">
@@ -136,7 +136,7 @@ export function AdminPage() {
     }
   }, []);
   useEffect(() => {
-    document.title = "Leaderboard admin";
+    document.title = "Tournament & Leaderboard admin";
     void check();
   }, [check]);
   useEffect(() => {

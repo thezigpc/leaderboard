@@ -170,3 +170,25 @@ export function useDrag(enabled: boolean, onDrop: (item: DragItem, target: strin
 
   return { bind, ghost, over: drag?.over ?? null, dragging: drag?.item.id ?? null };
 }
+
+let gamesCache: { at: number; data: { id: string; name: string }[] } | null = null;
+
+/** Games on the box that can play a match ("Play in Pool"); empty off a box. Cached a minute. */
+export function useMatchGames(): { id: string; name: string }[] {
+  const [games, setGames] = useState(gamesCache?.data ?? []);
+  useEffect(() => {
+    if (gamesCache && Date.now() - gamesCache.at < 60_000) return;
+    let live = true;
+    api.matchGames().then(
+      (r) => {
+        gamesCache = { at: Date.now(), data: r.games };
+        if (live) setGames(r.games);
+      },
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, []);
+  return games;
+}

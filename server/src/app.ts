@@ -32,6 +32,7 @@ import {
   mergeTheme,
   peopleSeen,
   presetTheme,
+  SERVER_ACTIONS,
   type Action,
   type AdminSettings,
   type AdminSettingsPatch,
@@ -47,6 +48,7 @@ import {
 } from "@leaderboard/shared";
 import { announceChange, attentionReporter, waitingTooLong } from "./bargames.js";
 import { BoardService, newId, validBoardId, type ApplyOutcome } from "./boards.js";
+import { MatchLinks } from "./matches.js";
 import { hashPin, randomPin, Scorers, validPin } from "./scorers.js";
 import { MAX_UPLOAD_MB, Uploads } from "./uploads.js";
 
@@ -62,11 +64,14 @@ export interface AppOptions {
   now?: () => number;
   /** How often to look for matches waiting too long (ms). */
   attentionEveryMs?: number;
+  /** How often to ask the box about matches being played in its games (ms). */
+  matchPollMs?: number;
 }
 
 export interface LeaderboardApp {
   app: express.Express;
   boards: BoardService;
+  matches: MatchLinks;
   auth: AdminAuth;
   /** Attaches socket.io to the HTTP server. */
   attach(server: HttpServer): IoServer;
@@ -223,6 +228,10 @@ export async function createApp(o: AppOptions): Promise<LeaderboardApp> {
   const attentionTimer = setInterval(checkAttention, o.attentionEveryMs ?? 60_000);
   attentionTimer.unref();
 
+  // Bracket matches played in games on the box (SDK 0.15.0). Registers "match_result".
+  const matches = new MatchLinks(bg, boards, now);
+  if (bg.connected) matches.every(o.matchPollMs ?? 3 * 60_000);
+
   // ----------------------------------------------------------------- routes
   const app = express();
   app.disable("x-powered-by");
@@ -313,6 +322,7 @@ export async function createApp(o: AppOptions): Promise<LeaderboardApp> {
           preset: typeof body.preset === "string" ? body.preset : undefined,
           copyFrom: validBoardId(body.copyFrom) ? body.copyFrom : undefined,
           keepEntrants: body.keepEntrants === true,
+          season: body.season === true,
           seedFrom: seedFrom && validBoardId(seedFrom.boardId) ? seedFrom : undefined,
           entry:
             body.entry && typeof body.entry === "object"
@@ -352,7 +362,33 @@ export async function createApp(o: AppOptions): Promise<LeaderboardApp> {
       if (!canScore(req, id)) return void res.status(401).json({ ok: false, error: "Sign in, or enter this board's PIN, to keep score." });
       const { version, action } = (req.body ?? {}) as { version?: unknown; action?: Action };
       if (!action || typeof action !== "object") return void res.status(400).json({ ok: false, error: "No change was sent." });
+      if (SERVER_ACTIONS.includes(action.type)) return void res.status(400).json({ ok: false, error: "That change comes from the box, not a phone." });
       send(res, await boards.apply(id, version, action));
+    }),
+  );
+
+  // Games on the box that can play a match (empty off a box). Scorekeepers only.
+  app.get(
+    "/api/match-games",
+    safe(async (req, res) => {
+      if (!isStaff(req) && !scorerBoards(req).length) return void res.status(401).json({ ok: false, error: "Sign in first." });
+      res.set("Cache-Control", "no-store");
+      res.json({ games: (await matches.games()).map((g) => ({ id: g.id, name: g.name })) });
+    }),
+  );
+
+  // "Play in Pool": the box makes a room for this match in that game.
+  app.post(
+    "/api/boards/:id/matches/:matchId/play",
+    json,
+    safe(async (req, res) => {
+      const id = req.params.id;
+      if (!boards.get(id)) return void res.status(404).json({ ok: false, error: "That board is gone." });
+      if (!canScore(req, id)) return void res.status(401).json({ ok: false, error: "Sign in, or enter this board's PIN, to keep score." });
+      if (!bg.connected) return void res.status(400).json({ ok: false, error: "Matches play in other games on a Bar Games box only." });
+      const gameId = (req.body ?? {}).gameId;
+      if (typeof gameId !== "string" || !gameId) return void res.status(400).json({ ok: false, error: "Pick a game." });
+      send(res, await matches.start(id, String(req.params.matchId).slice(0, 40), gameId));
     }),
   );
 
@@ -547,10 +583,12 @@ export async function createApp(o: AppOptions): Promise<LeaderboardApp> {
   return {
     app,
     boards,
+    matches,
     auth,
     attach,
     async close() {
       clearInterval(attentionTimer);
+      matches.close();
       if (listTimer) clearTimeout(listTimer);
       auth.close();
       await boards.flush();

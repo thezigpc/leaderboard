@@ -443,6 +443,49 @@ label.check {
 .tv .ml-called {
   display: none;
 }
+/* A match being played in a game on the box: "playing in Pool, room AB12". */
+.ml-game,
+.ml-note {
+  grid-column: 1 / -1;
+  font-size: 0.8em;
+  color: var(--accent);
+}
+.ml-game b {
+  letter-spacing: 0.06em;
+}
+.ml-note {
+  color: var(--accent2);
+  font-weight: 700;
+}
+.match-card .lane.game {
+  font-size: 12px;
+  max-width: 60%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.play-box {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  border: 1px dashed var(--line);
+}
+.play-box.on {
+  border: 1px solid var(--accent);
+}
+.play-box p {
+  margin: 0 0 6px;
+}
+.play-box .room {
+  letter-spacing: 0.08em;
+}
+.play-box .note {
+  color: var(--accent2);
+  font-weight: 700;
+}
+.play-box .chips button {
+  min-height: 48px;
+}
 .attempt-value {
   margin-left: auto;
 }

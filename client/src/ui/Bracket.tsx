@@ -114,7 +114,12 @@ function MatchCard({ m, names, all, follow, flash }: { m: DerivedMatch; names: M
     <div className={`match-card ${m.state} ${flash ? "flash" : ""}`}>
       {side("a")}
       {side("b")}
-      {m.lane && m.state === "ready" && <span className="lane">{m.lane}</span>}
+      {m.lane && m.state === "ready" && !m.game && <span className="lane">{m.lane}</span>}
+      {m.game && (
+        <span className="lane game" title={`Playing in ${m.game.name}, room ${m.game.room}`}>
+          {m.game.name} · {m.game.room}
+        </span>
+      )}
     </div>
   );
 }

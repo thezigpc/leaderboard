@@ -16,6 +16,7 @@ import {
   presetTheme,
   qualifiers,
   withSeason,
+  hasSeason,
   type Action,
   type ActionResult,
   type Board,
@@ -90,7 +91,7 @@ export class BoardService {
 
   /** The board as the engines see it (a season board pulls in its linked boards). */
   effective(b: Board): Board {
-    return b.season?.boards.length ? withSeason(b, b.season.boards.map((id) => this.boards.get(id))) : b;
+    return hasSeason(b) ? withSeason(b, b.season!.boards.map((id) => this.boards.get(id))) : b;
   }
 
   derived(b: Board): DerivedBoard {
@@ -138,6 +139,7 @@ export class BoardService {
     keepEntrants?: boolean;
     seedFrom?: { boardId: string; top: number };
     entry?: { kind: "players" | "teams"; size?: number };
+    season?: boolean;
   }): Promise<ApplyOutcome> {
     if (this.boards.size >= LIMITS.boards) return { ok: false, status: 400, error: `There are ${LIMITS.boards} boards already. Delete some old ones in Admin first.` };
     const now = this.now();
@@ -190,6 +192,10 @@ export class BoardService {
       const fail = step({ type: "addParticipants", names: [list.join("\n")] });
       if (fail) return fail;
       if (b.format === "single" || b.format === "double") b.settings[b.format].seeding = "board";
+    }
+    if (input.season === true && b.format === "points" && !src) {
+      const fail = step({ type: "season", season: { boards: [] } });
+      if (fail) return fail;
     }
     const fail = step({ type: "rename", title: title.trim() || (src ? src.title : "New board") });
     if (fail) return fail;

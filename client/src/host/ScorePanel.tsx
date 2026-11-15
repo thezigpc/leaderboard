@@ -1,11 +1,12 @@
 // The "Score" tab: the fastest way to enter results for each format.
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ladderTargets, type Board, type BoardView, type DerivedMatch, type PublicBoard } from "@leaderboard/shared";
+import { hasSeason, ladderTargets, type Board, type BoardView, type DerivedMatch, type PublicBoard } from "@leaderboard/shared";
 import { formatTime, namesOf, parseTime, valueText } from "../ui/format";
 import { MatchLine } from "../ui/Matches";
 import { GroupTables, StandingsTable } from "../ui/Standings";
 import { ResultSheet } from "./ResultSheet";
+import { SeasonTools } from "./SeasonTools";
 import type { Runner } from "./useActions";
 
 const asBoard = (b: PublicBoard) => b as unknown as Board;
@@ -14,17 +15,18 @@ export function ScorePanel({ view, run }: { view: BoardView; run: Runner["run"] 
   const b = view.board;
   if (b.status === "draft" && b.format !== "points" && b.format !== "best")
     return <p className="empty">Add the entrants, then start the board (Entrants tab) to keep score.</p>;
-  if (b.format === "points" && b.season?.boards.length) return <SeasonPanel view={view} />;
+  if (b.format === "points" && (hasSeason(b) || b.kind === "season")) return <SeasonPanel view={view} run={run} />;
   if (b.format === "points" && b.settings.points.scoring === "rounds") return <RoundsPanel view={view} run={run} />;
   if (b.format === "best") return <BestPanel view={view} run={run} />;
   return <MatchesPanel view={view} run={run} />;
 }
 
-function SeasonPanel({ view }: { view: BoardView }) {
+function SeasonPanel({ view, run }: { view: BoardView; run: Runner["run"] }) {
   return (
     <>
-      <p className="muted">This season board adds up its linked nights. Score the nightly boards; this one follows.</p>
+      <p className="muted">This season board adds up its nights: boards linked in Setup, and results added here. Score the nightly boards; this one follows.</p>
       <StandingsTable view={view} compact />
+      <SeasonTools view={view} run={run} />
     </>
   );
 }

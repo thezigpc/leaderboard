@@ -4,7 +4,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { FORMAT_NAMES, type BoardSummary, type BoardView, type WhoAmI } from "@leaderboard/shared";
+import { DEFAULT_NAME, FORMAT_NAMES, type BoardSummary, type BoardView, type WhoAmI } from "@leaderboard/shared";
 import { api, ApiError, scorerTokens, setHostToken, setScorerToken, setToken, type AuthStatus } from "../api";
 import { useBoard, useBoardList, useConfig, useTvSettings } from "../live";
 import { AuthForm, quietSignIn } from "../ui/AuthForm";
@@ -186,7 +186,7 @@ function HostHome({ who, status, refresh }: { who: WhoAmI; status: AuthStatus; r
   return (
     <div className="host">
       <header className="host-top">
-        <h1>{cfg?.gameName ?? "Leaderboard"}: scorekeeper</h1>
+        <h1>{cfg?.gameName ?? DEFAULT_NAME}: scorekeeper</h1>
         {who.staff && (
           <button
             className="link"
@@ -418,7 +418,8 @@ function HostBoard({ id, who, onAuthLost }: { id: string; who: WhoAmI; onAuthLos
     );
   const b = view.board;
   const draft = b.status === "draft";
-  const tabs: Tab[] = draft ? ["entrants", ...(b.format === "single" || b.format === "double" ? (["bracket"] as Tab[]) : []), "setup"] : ["score", "entrants", "setup"];
+  // A season's entrants come from its nights: it has nothing to add by hand.
+  const tabs: Tab[] = b.kind === "season" ? ["score", "setup"] : draft ? ["entrants", ...(b.format === "single" || b.format === "double" ? (["bracket"] as Tab[]) : []), "setup"] : ["score", "entrants", "setup"];
   const shown: Tab = tab && tabs.includes(tab) ? tab : tabs[0];
   return (
     <Themed theme={b.theme} className={`host host-board ${wide && (shown === "entrants" || shown === "bracket") ? "wide" : ""}`}>

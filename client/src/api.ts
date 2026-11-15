@@ -133,6 +133,8 @@ export const api = {
     keepEntrants?: boolean;
     seedFrom?: { boardId: string; top: number };
     entry?: { kind: "players" | "teams"; size: number };
+    /** A league season (a points table that adds up nights). */
+    season?: boolean;
   }) => request<CreatedBoard>("POST", "/api/boards", body),
   hostLogin: (pin: string) => request<{ token: string }>("POST", "/api/host-login", { pin }),
   people: (exclude?: string) => request<PeopleSeen>("GET", `/api/people${exclude ? `?exclude=${encodeURIComponent(exclude)}` : ""}`),
@@ -145,6 +147,9 @@ export const api = {
   countdown: (label: string, minutes: number) => request("POST", "/api/countdown", { label, minutes }),
   clearCountdown: () => request("DELETE", "/api/countdown"),
   upload: (file: File) => request<{ file: string }>("POST", "/api/uploads", file, { "content-type": file.type || "application/octet-stream" }),
+  matchGames: () => request<{ games: { id: string; name: string }[] }>("GET", "/api/match-games"),
+  playMatch: (id: string, matchId: string, gameId: string) =>
+    request<BoardView>("POST", `/api/boards/${encodeURIComponent(id)}/matches/${encodeURIComponent(matchId)}/play`, { gameId }),
   settings: () => request<AdminSettings>("GET", "/api/admin/settings"),
   saveSettings: (s: AdminSettingsPatch) => request<{ settings: AdminSettings }>("PUT", "/api/admin/settings", s),
 };

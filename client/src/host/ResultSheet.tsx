@@ -3,6 +3,8 @@
 
 import { useState } from "react";
 import type { BoardView, DerivedMatch } from "@leaderboard/shared";
+import { api } from "../api";
+import { useMatchGames } from "./kit";
 import type { Runner } from "./useActions";
 
 export function ResultSheet({ view, m, run, names, onClose }: { view: BoardView; m: DerivedMatch; run: Runner["run"]; names: Map<string, string>; onClose: () => void }) {
@@ -15,6 +17,8 @@ export function ResultSheet({ view, m, run, names, onClose }: { view: BoardView;
   const [sb, setSb] = useState<string>(r ? String((aFirst ? r.scoreB : r.scoreA) ?? "") : "");
   const [forfeit, setForfeit] = useState(!!r?.forfeit);
   const [busy, setBusy] = useState(false);
+  const games = useMatchGames();
+  const [playErr, setPlayErr] = useState("");
   const bestOf = b.format === "single" ? b.settings.single.bestOf : b.format === "double" ? b.settings.double.bestOf : b.format === "roundrobin" ? b.settings.roundrobin.bestOf : b.format === "ladder" ? b.settings.ladder.bestOf : 1;
   const draws = b.format === "roundrobin" ? b.settings.roundrobin.allowDraws : b.format === "points";
   const ready = m.state === "ready" || m.state === "done";
@@ -37,6 +41,7 @@ export function ResultSheet({ view, m, run, names, onClose }: { view: BoardView;
             ✕
           </button>
         </header>
+        {m.state === "ready" && <PlayOnBox view={view} m={m} games={games} error={playErr} setError={setPlayErr} />}
         {!ready ? (
           <p className="muted">Waiting for both players.</p>
         ) : (
@@ -113,6 +118,56 @@ export function ResultSheet({ view, m, run, names, onClose }: { view: BoardView;
           </button>
         )}
       </div>
+    </div>
+  );
+}
+
+/** "Play in Pool": the box makes a room in that game for this match, and its result comes back
+ * here by itself. Shown when the box has a game that plays two-sided matches. */
+function PlayOnBox({ view, m, games, error, setError }: { view: BoardView; m: DerivedMatch; games: { id: string; name: string }[]; error: string; setError: (s: string) => void }) {
+  const [starting, setStarting] = useState("");
+  if (m.game)
+    return (
+      <div className="play-box on">
+        <p>
+          🎮 Playing in <b>{m.game.name}</b>, room <b className="room">{m.game.room}</b>
+        </p>
+        {m.game.joinUrl && (
+          <a href={m.game.joinUrl} target="_blank" rel="noreferrer">
+            Open the room
+          </a>
+        )}
+        <p className="muted small">The result comes back here when the game ends. Tap the winner below to enter it yourself instead.</p>
+      </div>
+    );
+  if (!games.length && !m.note) return null;
+  return (
+    <div className="play-box">
+      {m.note && <p className="note">{m.note}</p>}
+      {games.length > 0 && (
+        <div className="chips">
+          {games.map((g) => (
+            <button
+              key={g.id}
+              disabled={!!starting}
+              onClick={async () => {
+                setStarting(g.id);
+                setError("");
+                try {
+                  await api.playMatch(view.board.id, m.id, g.id);
+                } catch (e) {
+                  setError((e as Error).message);
+                } finally {
+                  setStarting("");
+                }
+              }}
+            >
+              {starting === g.id ? "Starting…" : `🎮 Play in ${g.name}`}
+            </button>
+          ))}
+        </div>
+      )}
+      {error && <p className="error small">{error}</p>}
     </div>
   );
 }

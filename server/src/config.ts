@@ -14,5 +14,5 @@ export const CLIENT_DIST_PATH = process.env.CLIENT_DIST_PATH ?? path.resolve(her
 export const DATA_DIR = path.resolve(process.env.DATA_DIR ?? path.resolve(here, "../../data"));
 /** Overrides the password chosen on the /admin setup screen. */
 export const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? "";
-/** Standalone name ("Leaderboard" by default; the admin's name setting wins, the venue's rename on a box). */
+/** Standalone name ("Tournament & Leaderboard" by default; the admin's name setting wins, the venue's rename on a box). */
 export const GAME_NAME = process.env.GAME_NAME ?? "";

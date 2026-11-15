@@ -1,4 +1,4 @@
-# Leaderboard
+# Tournament & Leaderboard
 
 Scoreboards and tournament brackets for venue events: trivia nights, cornhole, pool,
 darts, leagues. The host keeps score from a phone; the TVs and the players' phones update
@@ -22,6 +22,18 @@ name at a time (Enter adds the next), tick tonight's regulars from earlier board
 a list and check how it was read. Pairs and teams are cards: tap a player, then their team,
 or let a blind draw make random teams. The bracket is the seeding screen: tap two names to
 swap them (or drag on an iPad), and it warns when last time's finalists would meet early.
+
+On a Bar Games box, a bracket match can be **played in another game on the box**: "Play in
+Pool" on a ready match makes a room in that game for the two players, the match card shows
+"playing in Pool, room AB12", and the game's result fills in the bracket by itself. A room
+that closes without a result puts the match back to ready, with a note; a result typed in by
+hand always wins.
+
+**Seasons** add up nights for a league: boards run here (any format; their places count) and
+nights from another game pasted in ("1. Quizzards 52"). Points per place or each night's
+total, a TV view of the season table, and "same team, other spelling?" to join names that
+split. When adding teams, returning teams are a tap away, and a near-miss spelling asks "Did
+you mean Quizzards?" first.
 
 Every result can be changed or undone. Changing a bracket result that later matches were
 built on asks first, then re-flows the bracket. A no-show can be withdrawn: their remaining

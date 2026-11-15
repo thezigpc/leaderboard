@@ -5,6 +5,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { FORMAT_HINTS, FORMAT_NAMES, PRESETS, type BoardSummary, type BoardView, type CustomPreset, type FormatId, type Theme, type TitleStyle } from "@leaderboard/shared";
 import { api, csvUrl, uploadUrl } from "../api";
+import { SeasonTools } from "./SeasonTools";
 import type { Runner } from "./useActions";
 
 function Section({ title, children, open }: { title: string; children: ReactNode; open?: boolean }) {
@@ -329,13 +330,16 @@ function ThemeEditor({ view, run, staff, presets, onPresetSaved }: { view: Board
 function SeasonEditor({ view, run, list }: { view: BoardView; run: Runner["run"]; list: BoardSummary[] }) {
   const b = view.board;
   const season = b.season ?? { boards: [], scoring: "placement" as const, placePoints: [10, 8, 6, 5, 4, 3, 2, 1] };
-  const candidates = list.filter((x) => x.id !== b.id && x.format === "points" && x.kind !== "season").sort((x, y) => (x.startedAt ?? x.createdAt) - (y.startedAt ?? y.createdAt));
+  const candidates = list.filter((x) => x.id !== b.id && x.kind !== "season" && x.status !== "draft").sort((x, y) => (x.startedAt ?? x.createdAt) - (y.startedAt ?? y.createdAt));
   const [pts, setPts] = useState(season.placePoints.join(", "));
   const save = (patch: Partial<typeof season>) => run({ type: "season", season: { ...season, ...patch } });
   return (
     <>
-      <p className="muted small">A season board adds up nightly points boards: points per place, or each night's total. Teams are matched by name.</p>
-      {candidates.length === 0 && <p className="muted">No other points boards yet.</p>}
+      <p className="muted small">
+        A season board adds up nights: boards run here (any format: their places count) and results pasted in from another game. Points per place, or each night's total. Teams are
+        matched by name; join other spellings below.
+      </p>
+      {candidates.length === 0 && <p className="muted">No other boards have started yet.</p>}
       <div className="season-list">
         {candidates.map((c) => (
           <Check
@@ -359,8 +363,9 @@ function SeasonEditor({ view, run, list }: { view: BoardView; run: Runner["run"]
           <input value={pts} onChange={(e) => setPts(e.target.value)} onBlur={() => save({ placePoints: pts.split(/[,\s]+/).filter(Boolean).map(Number).filter(Number.isFinite) })} />
         </label>
       )}
+      <SeasonTools view={view} run={run} />
       {b.season && (
-        <button className="link" onClick={() => run({ type: "season", season: null })}>
+        <button className="link" onClick={() => window.confirm("Unlink every night and drop the pasted results?") && run({ type: "season", season: null })}>
           Unlink all (back to a normal points table)
         </button>
       )}
@@ -487,7 +492,7 @@ export function SetupPanel({ view, run, staff, list, toast }: { view: BoardView;
       )}
 
       {b.format === "points" && (
-        <Section title="Season (sum nightly boards)">
+        <Section title="Season (add up nights)">
           <SeasonEditor view={view} run={run} list={list} />
         </Section>
       )}

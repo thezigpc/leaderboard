@@ -5,7 +5,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { BackToGames } from "@bargames/gamekit/client";
-import { FORMAT_NAMES, type BoardSummary, type BoardView, type DerivedMatch } from "@leaderboard/shared";
+import { DEFAULT_NAME, FORMAT_NAMES, type BoardSummary, type BoardView, type DerivedMatch } from "@leaderboard/shared";
 import { useBoard, useBoardList, useConfig } from "../live";
 import { useVenue } from "../useVenue";
 import { BracketScroll } from "../ui/Bracket";
@@ -67,7 +67,7 @@ export function PhoneHome() {
   return (
     <div className="phone">
       <header className="ph-head">
-        <h1>{cfg?.gameName ?? "Leaderboard"}</h1>
+        <h1>{cfg?.gameName ?? DEFAULT_NAME}</h1>
         <p className="muted">Live standings and brackets</p>
       </header>
       {list === null ? (

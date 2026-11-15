@@ -1,6 +1,6 @@
 {
   "name": "server",
-  "version": "0.3.4",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@bargames/gamekit": "file:../vendor/bargames-gamekit-0.8.0.tgz",
-    "@bargames/sdk": "file:../vendor/bargames-sdk-0.14.0.tgz",
+    "@bargames/sdk": "file:../vendor/bargames-sdk-0.15.0.tgz",
     "@leaderboard/shared": "*",
     "express": "^4.19.2",
     "socket.io": "^4.7.5"

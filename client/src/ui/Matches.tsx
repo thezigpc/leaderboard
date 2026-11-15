@@ -37,7 +37,17 @@ export function MatchLine({
         {side("b")}
       </span>
       {m.lane && m.state !== "done" && <span className="ml-lane">{m.lane}</span>}
-      {m.state === "ready" && m.calledAt && <span className="ml-called">called</span>}
+      {m.state === "ready" && m.calledAt && !m.game && <span className="ml-called">called</span>}
+      {m.game && (
+        <span className="ml-game">
+          playing in {m.game.name}, room <b>{m.game.room}</b>
+        </span>
+      )}
+      {onClick && m.note && !m.game && (
+        <span className="ml-note" title={m.note}>
+          needs a result
+        </span>
+      )}
     </Tag>
   );
 }

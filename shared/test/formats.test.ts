@@ -14,6 +14,9 @@ import {
   qualifiers,
   rankIds,
   withSeason,
+  hasSeason,
+  readNight,
+  similarNames,
   type Board,
 } from "../src/index.js";
 import { act, board, env, idOf, nameOf } from "./helpers.js";
@@ -336,6 +339,61 @@ describe("seasons", () => {
     assert.equal(d.columns.length, 2);
     // Scores are entered on the nightly boards, not the season.
     assert.equal(applyAction(season, { type: "score", pid: "x", roundId: "s0", value: 1 }, env()).ok, false);
+  });
+
+  test("typed-in nights, a bracket night and aliases, in date order", () => {
+    let cup: Board = { ...newBoard("c1", "Cup", "single", Date.UTC(2026, 10, 8, 20)), startedAt: Date.UTC(2026, 10, 8, 20) };
+    cup = act(cup, { type: "addParticipants", names: ["Quizzards\nBrainiacs"] });
+    cup = act(cup, { type: "start" });
+    cup = act(cup, { type: "result", matchId: "W1.0", winner: idOf(cup, "Brainiacs") });
+    let season = newBoard("s", "Fall league", "points", 1);
+    season = act(season, {
+      type: "season",
+      season: {
+        boards: ["c1"],
+        scoring: "placement",
+        placePoints: [10, 8, 6],
+        nights: [
+          { id: "late1", title: "Nov 15", at: Date.UTC(2026, 10, 15, 20), results: readNight("1. Quizards 52\n2. Brainiacs 40\n3. Table Six 12") },
+          { id: "early1", title: "Nov 1", at: Date.UTC(2026, 10, 1, 20), results: [{ name: "Quizzards", place: 1 }, { name: "", place: 2 }] },
+        ],
+        aliases: { "quizards": "Quizzards", "Brainiacs": "Brainiacs" },
+      },
+    });
+    assert.equal(season.season!.nights![1].results.length, 1, "a nameless row is dropped");
+    assert.deepEqual(season.season!.aliases, { quizards: "Quizzards" }, "an alias to itself is dropped");
+    assert.ok(hasSeason(season));
+    const d = derive(withSeason(season, [cup]));
+    const pts = Object.fromEntries(d.standings.map((r) => [r.name, r.value]));
+    assert.deepEqual(pts, { Quizzards: 28, Brainiacs: 18, "Table Six": 6 });
+    const v = withSeason(season, [cup]);
+    assert.deepEqual(v.settings.points.rounds.map((r) => r.name), ["Nov 1", "11/8", "Nov 15"]);
+  });
+
+  test("readNight: places, scores, or just the order", () => {
+    assert.deepEqual(readNight("Place, Team\n1st Quizzards\n2) Brainiacs\n2. Table 6"), [
+      { name: "Quizzards", place: 1 },
+      { name: "Brainiacs", place: 2 },
+      { name: "Table 6", place: 2 },
+    ]);
+    assert.deepEqual(readNight("Brainiacs, 38\nQuizzards	42 pts\nNewbies 38"), [
+      { name: "Quizzards", place: 1, score: 42 },
+      { name: "Brainiacs", place: 2, score: 38 },
+      { name: "Newbies", place: 2, score: 38 },
+    ]);
+    assert.deepEqual(readNight("Ann\nBo"), [
+      { name: "Ann", place: 1 },
+      { name: "Bo", place: 2 },
+    ]);
+  });
+
+  test("similarNames: other spellings of the same team, not the same name", () => {
+    const known = ["Quizzards", "The Brainiacs", "Table 6", "Bo"];
+    assert.deepEqual(similarNames("Quizards", known), ["Quizzards"]);
+    assert.deepEqual(similarNames("brainiacs!", known), ["The Brainiacs"]);
+    assert.deepEqual(similarNames("quizzards", known), [], "same name, other case: not a near miss");
+    assert.deepEqual(similarNames("Bob", known), [], "too short to guess");
+    assert.deepEqual(similarNames("Night Owls", known), []);
   });
 });
 

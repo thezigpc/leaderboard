@@ -3,7 +3,7 @@
 // one added can be taken back.
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { entrantLine, seedList, type Board, type BoardView } from "@leaderboard/shared";
+import { entrantLine, seedList, similarNames, type Board, type BoardView } from "@leaderboard/shared";
 import { usePeople } from "./kit";
 import type { Runner } from "./useActions";
 
@@ -12,6 +12,8 @@ export function QuickAdd({ view, run, placeholder = "Add a name" }: { view: Boar
   const people = usePeople(b.id);
   const [text, setText] = useState("");
   const [dup, setDup] = useState("");
+  // "Did you mean Alex B.?" before a new spelling of a regular splits their history.
+  const [near, setNear] = useState<{ typed: string; names: string[] } | null>(null);
   const [last, setLast] = useState<{ id: string; name: string } | null>(null);
   const input = useRef<HTMLInputElement>(null);
 
@@ -37,7 +39,16 @@ export function QuickAdd({ view, run, placeholder = "Add a name" }: { view: Boar
       setDup(b.participants.find((p) => p.name.toLowerCase() === name.toLowerCase())?.name ?? name);
       return;
     }
+    if (!force && people && !people.players.some((p) => p.name.toLowerCase() === name.toLowerCase())) {
+      const like = similarNames(
+        name,
+        people.players.map((p) => p.name).filter((n) => !taken.has(n.toLowerCase())),
+        2,
+      );
+      if (like.length) return setNear({ typed: name, names: like });
+    }
     setDup("");
+    setNear(null);
     expecting.current = true;
     // A name is one entrant here, even with a comma or colon in it.
     const ok = await run({ type: "addParticipants", names: [entrantLine({ name: name.replace(/[,;\t]/g, " ") })] });
@@ -85,6 +96,7 @@ export function QuickAdd({ view, run, placeholder = "Add a name" }: { view: Boar
             onChange={(e) => {
               setText(e.target.value);
               setDup("");
+              setNear(null);
             }}
           />
           <span className="hint">Enter adds</span>
@@ -103,6 +115,19 @@ export function QuickAdd({ view, run, placeholder = "Add a name" }: { view: Boar
               </button>
             ))}
           </div>
+        </div>
+      )}
+      {near && (
+        <div className="notice warn">
+          <span>Did you mean {near.names.join(" or ")}? They've played here before.</span>
+          <span className="chips">
+            {near.names.map((n) => (
+              <button key={n} className="primary" onClick={() => void add(n, true)}>
+                {n}
+              </button>
+            ))}
+            <button onClick={() => void add(near.typed, true)}>Keep “{near.typed}”</button>
+          </span>
         </div>
       )}
       {dup && (

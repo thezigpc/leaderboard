@@ -1,12 +1,12 @@
 {
   "id": "leaderboard",
-  "name": "Leaderboard",
+  "name": "Tournament & Leaderboard",
   "kind": "app",
-  "version": "0.3.4",
-  "image": "ghcr.io/thezigpc/leaderboard:0.3.4",
+  "version": "0.4.0",
+  "image": "ghcr.io/thezigpc/leaderboard:0.4.0",
   "port": 3008,
   "sdk": {
-    "version": "0.14.0",
+    "version": "0.15.0",
     "level": 2
   },
   "routes": {
@@ -27,7 +27,10 @@
     "winner",
     "game_result"
   ],
-  "commands": [],
+  "commands": [
+    "match_result"
+  ],
+  "tournaments": true,
   "brandable": [
     "displayName",
     "tagline",

@@ -83,12 +83,15 @@ export async function startApp(opts: { coreUrl?: string; token?: string; gameNam
 export interface FakeCore {
   url: string;
   posts: { path: string; body: Record<string, unknown> }[];
+  /** Bracket matches the app started (SDK 0.15.0), by match id. */
+  matches: Map<string, Record<string, unknown>>;
   close(): Promise<void>;
 }
 
 /** A fake box core: venue context, and it records events, results, attention and countdowns. */
 export async function fakeCore(): Promise<FakeCore> {
   const posts: FakeCore["posts"] = [];
+  const matches: FakeCore["matches"] = new Map();
   const srv = http.createServer((req, res) => {
     if (req.headers.authorization !== `Bearer ${TOKEN}`) return void res.writeHead(401).end();
     if (req.method === "GET" && req.url === "/internal/venue") {
@@ -109,7 +112,23 @@ export async function fakeCore(): Promise<FakeCore> {
     req.on("end", () => {
       const body = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
       posts.push({ path: `${req.method} ${req.url}`, body });
+      const one = req.url === "/internal/matches/games" ? null : /^\/internal\/matches\/([^/]+)$/.exec(req.url ?? "");
+      if (one && req.method === "GET" && !matches.has(decodeURIComponent(one[1]))) return void res.writeHead(404).end("{}");
       res.writeHead(200, { "content-type": "application/json" });
+      if (req.url === "/internal/matches/games") {
+        return void res.end(
+          JSON.stringify([
+            { id: "pool", name: "Pool", players: { min: 2, max: 2 } },
+            { id: "trivia", name: "Trivia", players: { min: 3, max: 20 } },
+          ]),
+        );
+      }
+      if (req.url === "/internal/matches" && req.method === "POST") {
+        const rec = { ...body, appId: "leaderboard", roomCode: `R${matches.size + 1}`, status: "playing", createdAt: new Date().toISOString(), joinUrl: "https://testbar.example/pool/join" };
+        matches.set(String(body.matchId), rec);
+        return void res.end(JSON.stringify(rec));
+      }
+      if (one && req.method === "GET") return void res.end(JSON.stringify(matches.get(decodeURIComponent(one[1]))));
       if (req.url === "/internal/venue-password") return void res.end(JSON.stringify({ ok: body.password === "box-password" }));
       if (req.url === "/internal/countdown" && req.method === "POST")
         return void res.end(JSON.stringify({ id: "c1", label: body.label, endsAt: new Date(Date.now() + Number(body.minutes) * 60_000).toISOString() }));
@@ -120,6 +139,7 @@ export async function fakeCore(): Promise<FakeCore> {
   return {
     url: `http://127.0.0.1:${(srv.address() as AddressInfo).port}`,
     posts,
+    matches,
     close: () => new Promise((r) => srv.close(() => r())),
   };
 }

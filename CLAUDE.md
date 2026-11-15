@@ -1,11 +1,11 @@
-# Leaderboard: project notes
+# Tournament & Leaderboard: project notes
 
 A scoreboard and tournament app for the **Bar Games box** ("Venuebox"), and usable
 standalone. The venue runs its own events: trivia nights, cornhole, pool, darts, and more.
 The host keeps score from their phone, and the TVs and players' phones show standings and
 brackets live. Several boards can run at once, and each can be themed for its event.
 
-**Status: 0.3.4 (SDK 0.14.0, kit 0.8.0; no changes needed). 0.3.3 (kit 0.7.4: the TV address wraps onto up to three lines at full size, `lines={3} minScale={0.8}`). 0.3.2 (kit 0.7.3: the TV's "Follow along at" address uses the kit's `<JoinAddress>`, and the TV view works on a portrait screen). 0.3.1: SDK 0.13.0. 0.3.0 released (2026-11-13): hosts who aren't staff can start boards, and the TV cursor fix (below). 0.2.0: the phone-first setup. 0.1.0 had** all six formats, the host, TV, phone and admin pages,
+**Status: 0.4.0 (2026-11-14): renamed "Tournament & Leaderboard" (id, repo and image stay `leaderboard`), SDK 0.15.0: bracket matches played in other games on the box, season nights and aliases, returning teams (below). 0.3.4 (SDK 0.14.0, kit 0.8.0; no changes needed). 0.3.3 (kit 0.7.4: the TV address wraps onto up to three lines at full size, `lines={3} minScale={0.8}`). 0.3.2 (kit 0.7.3: the TV's "Follow along at" address uses the kit's `<JoinAddress>`, and the TV view works on a portrait screen). 0.3.1: SDK 0.13.0. 0.3.0 released (2026-11-13): hosts who aren't staff can start boards, and the TV cursor fix (below). 0.2.0: the phone-first setup. 0.1.0 had** all six formats, the host, TV, phone and admin pages,
 and the box wiring. See "As built" at the end, [README.md](README.md) and
 [BARGAMES.md](BARGAMES.md). Keep this file up to date as decisions are made.
 
@@ -93,7 +93,7 @@ The box, its SDK and the shared game kit are the user's other projects:
   phone page, settings, the same kind of package as this one) and
   `C:\CodeProjects\BuzzBoard` / `C:\CodeProjects\BingoDigitalGame` (the same stack, kit
   usage, tests and release flow). Read their `CLAUDE.md` and `BARGAMES.md`.
-- Vendored here: `vendor/bargames-sdk-0.14.0.tgz`, `vendor/bargames-gamekit-0.8.0.tgz`
+- Vendored here: `vendor/bargames-sdk-0.15.0.tgz`, `vendor/bargames-gamekit-0.8.0.tgz`
   (install as file dependencies, as Bingo does).
 
 ### This is an app (`"kind": "app"`)
@@ -294,6 +294,38 @@ events are sometimes run by a host who isn't staff.
 - The players' page links to `/host?new`, which opens the wizard (or the host-PIN form).
 - Fixed in the same change: the TV page never stopped `tableMode()`, so after Back inside
   the app the pointer stayed hidden and the page stayed marked as a shared screen.
+
+## Tournaments, seasons, team identity (0.4.0, 2026-11-14)
+
+Asked for by the GameBroker session (user-approved), alongside the new Trivia Night game
+(`C:\CodeProjects\TriviaNight`, its BRIEF.md "Leaderboard and tournaments").
+
+- **Rename** in the app only: `bargames.json` name, `DEFAULT_NAME`, page titles, README. The
+  id `leaderboard`, the repo and the image name stay, so the box and its data carry on.
+- **Matches in other games** (`server/src/matches.ts`, `MatchLinks`; see BARGAMES.md):
+  `"tournaments": true`, command `match_result`. "Play in <game>" on a ready match's result
+  sheet (`PlayOnBox` in `host/ResultSheet.tsx`, games from `useMatchGames()` in `kit.tsx`).
+  The link lives in `board.meta[matchId].game` (`GameLink`), set and cleared only by the
+  server-only action `gameLink` (`SERVER_ACTIONS`); `derive()` copies it onto matches as
+  `game` while the same two players are on it (`liveGameLink`), and `note` after a cancel.
+  Any result (`settled()` in actions.ts) clears both: a result typed in by hand wins.
+- **Seasons** (`shared/src/season.ts`): any format can be a night (its standings' places);
+  `season.nights` are typed/pasted nights (`readNight`: leading number = place, trailing
+  number after a comma/tab/"pts" = score, after a plain space only when every line has
+  one, so "Table 6" stays a name); `season.aliases` joins spellings (`seasonName`). Nights
+  sort by date. A "League season" tile in the wizard creates `kind: "season"`; a season
+  board's tabs are Score · Setup, and `host/SeasonTools.tsx` adds nights, removes them,
+  and offers "Count as …" for look-alike names (`similarNames` in people.ts).
+- **Why pasted nights:** an app can't read other games' `game_result` yet (asked the
+  GameBroker session for a results feed). Trivia's results reach seasons by staff pasting
+  the final scores.
+- **Returning teams** (`TeamsBoard.tsx`): chips for teams from earlier boards (with their
+  members), suggestions while typing a team name, and "Did you mean Quizzards?" before a
+  near-miss spelling is added; the same check for players in `QuickAdd.tsx`.
+- Tests: 96 (6 for matches against the fake core's `/internal/matches*`, season nights and
+  aliases, `readNight`, `similarNames`). The mock box's `fake-pool` walk-through:
+  start → `POST /__bargames/dev/matches/<id>/result {"winner"}` → the bracket moves on;
+  `{"cancel":true}` → ready with a note.
 
 **Not built** (only when asked): a host-run "reveal" mode, per-point live scoring, player
 accounts, images on participants, swiss format.

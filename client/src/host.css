@@ -781,3 +781,74 @@ button.qa-add {
 .ph-start .button {
   min-height: 44px;
 }
+
+/* ------------------------------------------------------------- season tools */
+.season-tools {
+  margin-top: 16px;
+  display: grid;
+  gap: 8px;
+}
+.season-tools .row-between {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.season-tools h3 {
+  margin: 8px 0 0;
+}
+.night-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.night-list li,
+.alias-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+.night-preview {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+.night-preview li {
+  display: grid;
+  grid-template-columns: 2em 1fr auto;
+  gap: 4px 8px;
+  align-items: baseline;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+}
+.night-preview .place {
+  font-weight: 800;
+  color: var(--accent);
+}
+.night-preview .score {
+  font-variant-numeric: tabular-nums;
+}
+.night-preview .near {
+  grid-column: 2 / -1;
+}
+.night-preview .near button.on {
+  background: var(--accent);
+  color: #111;
+}
+
+/* ------------------------------------------------------------- returning teams */
+.team-suggest {
+  margin-top: 8px;
+}
+.returning {
+  margin: 12px 0;
+}
+.near-team {
+  display: grid;
+  gap: 8px;
+}

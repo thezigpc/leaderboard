@@ -2,10 +2,10 @@
 // pair them up). On a wide screen players can also be dragged between teams.
 // Every change sends the whole arrangement, built from the latest board.
 
-import { useState } from "react";
-import type { BoardView, PublicBoard } from "@leaderboard/shared";
+import { useMemo, useState } from "react";
+import { similarNames, type BoardView, type PublicBoard, type TeamSeen } from "@leaderboard/shared";
 import { DrawSheet } from "./DrawSheet";
-import { namesOnBoard, useDrag, type DragItem } from "./kit";
+import { namesOnBoard, useDrag, usePeople, type DragItem } from "./kit";
 import type { Runner } from "./useActions";
 
 type Team = { id?: string; name: string; members: string[] };
@@ -38,7 +38,21 @@ export function TeamsBoard({ view, run, wide }: { view: BoardView; run: Runner["
   const [newTeam, setNewTeam] = useState("");
   const [drawing, setDrawing] = useState(false);
   const [err, setErr] = useState("");
+  // "Did you mean Quizzards?" before a new spelling of a returning team splits its standings.
+  const [near, setNear] = useState<{ typed: string; teams: TeamSeen[] } | null>(null);
+  const people = usePeople(b.id);
   const cur = arrangementOf(b);
+  const onBoard = useMemo(() => new Set(b.participants.map((p) => p.name.toLowerCase())), [b.participants]);
+  const returning = useMemo(() => (people?.teams ?? []).filter((t) => !onBoard.has(t.name.toLowerCase())), [people, onBoard]);
+  const typedTeam = newTeam.trim().toLowerCase();
+  const teamSuggestions = useMemo(() => {
+    if (!typedTeam) return [];
+    const starts = returning.filter((t) => t.name.toLowerCase() !== typedTeam && t.name.toLowerCase().split(/\s+/).some((w, i, all) => w.startsWith(typedTeam) || all.slice(i).join(" ").startsWith(typedTeam)));
+    const like = similarNames(newTeam, returning.map((t) => t.name), 3)
+      .map((n) => returning.find((t) => t.name === n)!)
+      .filter((t) => t && !starts.includes(t));
+    return [...starts, ...like].slice(0, 4);
+  }, [typedTeam, newTeam, returning]);
 
   const change = (f: (a: Arrangement, v: BoardView) => Arrangement | null) =>
     run((v) => {
@@ -97,20 +111,34 @@ export function TeamsBoard({ view, run, wide }: { view: BoardView; run: Runner["
     setErr("");
     if (await change((a) => ({ ...a, waiting: [...a.waiting, name] }))) setNewPlayer("");
   };
-  const addTeam = async () => {
-    const name = newTeam.trim().replace(/\s+/g, " ");
+  const addTeam = async (raw = newTeam, opts: { force?: boolean; members?: string[] } = {}) => {
+    const name = raw.trim().replace(/\s+/g, " ");
     if (!name) return;
     if (b.participants.some((p) => same(p.name, name))) return setErr(`There's already a team called ${name}.`);
+    if (!opts.force && !opts.members && !returning.some((t) => same(t.name, name))) {
+      const like = similarNames(name, returning.map((t) => t.name), 2);
+      if (like.length) return setNear({ typed: name, teams: like.map((n) => returning.find((t) => t.name === n)!) });
+    }
     setErr("");
+    setNear(null);
     const who = picked?.name;
     setPicked(null);
     const ok = await change((a) => {
-      const n = who ? without(a, who) : a;
-      n.teams.push({ name, members: who ? [who] : [] });
+      let n = who ? without(a, who) : a;
+      // A returning team brings its members from last time, unless they're on another team now.
+      const members = who ? [who] : [];
+      for (const m of opts.members ?? []) {
+        if (members.some((x) => same(x, m))) continue;
+        if (n.teams.some((t) => t.members.some((x) => same(x, m)))) continue;
+        n = without(n, m);
+        members.push(m);
+      }
+      n.teams.push({ name, members: size ? members.slice(0, size) : members });
       return n;
     });
     if (ok) setNewTeam("");
   };
+  const addReturning = (t: TeamSeen) => void addTeam(t.name, { members: t.members });
 
   const full = cur.teams.filter((t) => size && t.members.length >= size).length;
   const chip = (name: string, from: string) => {
@@ -237,11 +265,64 @@ export function TeamsBoard({ view, run, wide }: { view: BoardView; run: Runner["
               void addTeam();
             }}
           >
-            <input value={newTeam} maxLength={40} autoCapitalize="words" placeholder={picked ? `New team with ${picked.name}` : "+ New team"} aria-label="New team name" onChange={(e) => setNewTeam(e.target.value)} />
+            <input
+              value={newTeam}
+              maxLength={40}
+              autoCapitalize="words"
+              placeholder={picked ? `New team with ${picked.name}` : "+ New team"}
+              aria-label="New team name"
+              onChange={(e) => {
+                setNewTeam(e.target.value);
+                setNear(null);
+              }}
+            />
             {newTeam.trim() && <button className="primary">Add</button>}
+            {teamSuggestions.length > 0 && !near && (
+              <div className="chips team-suggest">
+                {teamSuggestions.map((t) => (
+                  <button key={t.name} type="button" onClick={() => addReturning(t)}>
+                    {t.name} <small className="muted">{t.times}×</small>
+                  </button>
+                ))}
+              </div>
+            )}
           </form>
         )}
       </div>
+      {near && (
+        <div className="notice warn near-team">
+          <span>
+            Did you mean {near.teams.map((t, i) => (
+              <span key={t.name}>
+                {i > 0 && " or "}
+                <b>{t.name}</b>
+              </span>
+            ))}
+            ? Picking theirs keeps their season together.
+          </span>
+          <span className="chips">
+            {near.teams.map((t) => (
+              <button key={t.name} className="primary" onClick={() => addReturning(t)}>
+                {t.name}
+              </button>
+            ))}
+            <button onClick={() => void addTeam(near.typed, { force: true })}>Keep “{near.typed}”</button>
+          </span>
+        </div>
+      )}
+      {canAddTeams && returning.length > 0 && (
+        <div className="returning">
+          <p className="lab">Returning teams: tap to add</p>
+          <div className="chips">
+            {returning.slice(0, 8).map((t) => (
+              <button key={t.name} onClick={() => addReturning(t)} title={t.members.join(", ")}>
+                {t.name}
+                {t.members.length > 0 && <small className="muted"> {t.members.length}</small>}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       {draft && (cur.waiting.length > 1 || cur.teams.length > 1) && (
         <button className="wide" onClick={() => setDrawing(true)}>
           🎲 Blind draw: make random teams

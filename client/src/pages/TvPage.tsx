@@ -9,7 +9,7 @@ import { useSearchParams } from "react-router-dom";
 import { JoinAddress, VenueAnnouncement } from "@bargames/gamekit/client";
 import { isOnBox, joinDisplay, tableMode, type TableModeController } from "@bargames/sdk/client";
 import { bgUrl } from "@bargames/sdk/client";
-import { groupName, leaders, type BoardSummary, type BoardView, type StandingRow } from "@leaderboard/shared";
+import { DEFAULT_NAME, groupName, leaders, type BoardSummary, type BoardView, type StandingRow } from "@leaderboard/shared";
 import { getSocket, useBoardList, useBoards, useConfig, useTvSettings } from "../live";
 import { useVenue } from "../useVenue";
 import { uploadUrl } from "../api";
@@ -255,7 +255,7 @@ export function TvPage() {
     };
   }, []);
   useEffect(() => {
-    document.title = `${cfg?.gameName ?? "Leaderboard"} TV`;
+    document.title = `${cfg?.gameName ?? DEFAULT_NAME} TV`;
   }, [cfg]);
 
   // A TV left on for days picks up a new version of the app by itself.
@@ -309,7 +309,7 @@ export function TvPage() {
     <div className="tv">
       <VenueAnnouncement ctx={venue} />
       <div className="tv-frame">
-        {view ? <TvBoard key={view.board.id} view={view} qr={qr} /> : list ? <Idle name={cfg?.gameName ?? "Leaderboard"} list={list} /> : null}
+        {view ? <TvBoard key={view.board.id} view={view} qr={qr} /> : list ? <Idle name={cfg?.gameName ?? DEFAULT_NAME} list={list} /> : null}
       </div>
       {ids.length > 1 && (
         <div className="tv-rotation">

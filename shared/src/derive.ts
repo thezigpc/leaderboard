@@ -29,6 +29,10 @@ function upNextOf(matches: DerivedMatch[]): DerivedMatch[] {
 }
 
 export function derive(b: Board): DerivedBoard {
+  return withGames(b, deriveFormat(b));
+}
+
+function deriveFormat(b: Board): DerivedBoard {
   switch (b.format) {
     case "single":
     case "double":
@@ -42,6 +46,27 @@ export function derive(b: Board): DerivedBoard {
     default:
       return b.settings.points.scoring === "matches" ? deriveLeague(b) : derivePoints(b);
   }
+}
+
+/** The game a match is being played in, while it's still the same two players and undecided. */
+export function liveGameLink(b: Board, m: DerivedMatch) {
+  const g = b.meta[m.id]?.game;
+  if (!g || m.state !== "ready" || m.a.kind !== "player" || m.b.kind !== "player") return undefined;
+  return (g.a === m.a.id && g.b === m.b.id) || (g.a === m.b.id && g.b === m.a.id) ? g : undefined;
+}
+
+/** Games on the box and the host's notes, onto the matches they belong to. Objects are shared
+ * between `matches` and `upNext`, so setting them once covers both. */
+function withGames(b: Board, d: DerivedBoard): DerivedBoard {
+  if (!Object.keys(b.meta).length) return d;
+  for (const m of d.matches) {
+    const meta = b.meta[m.id];
+    if (!meta) continue;
+    const g = liveGameLink(b, m);
+    if (g) m.game = { name: g.game, room: g.room, ...(g.joinUrl ? { joinUrl: g.joinUrl } : {}) };
+    if (meta.note && m.state !== "done") m.note = meta.note;
+  }
+  return d;
 }
 
 // ----------------------------------------------------------------- brackets

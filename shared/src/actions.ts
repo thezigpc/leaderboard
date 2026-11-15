@@ -13,6 +13,7 @@ import type {
   Board,
   BracketSettings,
   FormatId,
+  GameLink,
   FormatSettings,
   LadderSettings,
   LeagueTiebreak,
@@ -22,6 +23,7 @@ import type {
   PointsTiebreak,
   RoundRobinSettings,
   SeasonLink,
+  SeasonNight,
   Theme,
   TitleStyle,
 } from "./types.js";
@@ -54,9 +56,14 @@ export type Action =
   | { type: "lane"; matchId: string; lane: string | null }
   | { type: "call"; matchId: string; called: boolean }
   | { type: "theme"; theme: unknown }
-  | { type: "season"; season: unknown };
+  | { type: "season"; season: unknown }
+  /** Server only: a match started in (or finished with) a game on the box. */
+  | { type: "gameLink"; matchId: string; game: GameLink | null; note?: string };
 
 export type ActionType = Action["type"];
+
+/** Actions only the server makes (the box's match results); a phone can't send them. */
+export const SERVER_ACTIONS: readonly ActionType[] = ["gameLink"];
 
 export type ActionResult =
   | { ok: true; board: Board; /** The match a result was recorded for (for events and "just changed" highlights). */ matchId?: string }
@@ -207,8 +214,37 @@ export function cleanSeason(v: unknown, selfId: string): SeasonLink | undefined 
   const placePoints = Array.isArray(o.placePoints)
     ? o.placePoints.map((x) => num(x, -1000, 1000, 0)).slice(0, 32)
     : [10, 8, 6, 5, 4, 3, 2, 1];
-  return { boards, scoring: pick(o.scoring, ["placement", "total"] as const, "placement"), placePoints };
+  const nights: SeasonNight[] = (Array.isArray(o.nights) ? o.nights : []).slice(0, LIMITS.seasonBoards).flatMap((n) => {
+    const x = obj(n);
+    const results = (Array.isArray(x.results) ? x.results : [])
+      .map((r) => {
+        const y = obj(r);
+        const score = y.score === undefined || y.score === null || y.score === "" ? undefined : Number(y.score);
+        return { name: cleanName(y.name), place: int(y.place, 1, 999, 0), ...(score !== undefined && Number.isFinite(score) ? { score } : {}) };
+      })
+      .filter((r) => r.name && r.place > 0)
+      .slice(0, LIMITS.participants);
+    const id = typeof x.id === "string" && /^[a-z0-9]{4,20}$/.test(x.id) ? x.id : "";
+    if (!id || !results.length) return [];
+    return [{ id, title: cleanName(x.title, 40) || "Night", at: int(x.at, 0, 8.64e15, 0), results }];
+  });
+  const aliases: Record<string, string> = {};
+  for (const [from, to] of Object.entries(obj(o.aliases)).slice(0, 500)) {
+    const k = nameKey(String(from));
+    const name = cleanName(to);
+    if (k && name && k !== nameKey(name)) aliases[k] = name;
+  }
+  return {
+    boards,
+    scoring: pick(o.scoring, ["placement", "total"] as const, "placement"),
+    placePoints,
+    ...(nights.length ? { nights } : {}),
+    ...(Object.keys(aliases).length ? { aliases } : {}),
+  };
 }
+
+/** How names are matched across nights: case and spacing don't matter. */
+export const nameKey = (name: string) => name.trim().toLowerCase().replace(/\s+/g, " ");
 
 export interface ReadEntrant {
   name: string;
@@ -470,7 +506,7 @@ function reduce(b: Board, a: Action, env: ActionEnv): Inner {
     }
     case "score": {
       if (b.format !== "points" || b.settings.points.scoring !== "rounds") return fail("This board doesn't take round scores.");
-      if (b.season?.boards.length) return fail("A season board adds up its linked boards; score those instead.");
+      if (b.season && (b.season.boards.length || b.season.nights?.length)) return fail("A season board adds up its nights; score those instead.");
       const p = participant(b, a.pid);
       if (!p) return fail("That entrant isn't on this board.", "NOT_FOUND");
       if (!b.settings.points.rounds.some((r) => r.id === a.roundId)) return fail("That round isn't on this board.", "NOT_FOUND");
@@ -555,7 +591,7 @@ function reduce(b: Board, a: Action, env: ActionEnv): Inner {
         m.lane = a.lane;
         m.calledAt ??= env.now;
       }
-      if (!m.lane && !m.calledAt) delete b.meta[a.matchId];
+      tidyMeta(b, a.matchId);
       return OK;
     }
     case "call": {
@@ -565,12 +601,27 @@ function reduce(b: Board, a: Action, env: ActionEnv): Inner {
       const m = (b.meta[a.matchId] ??= {});
       if (a.called) m.calledAt = env.now;
       else delete m.calledAt;
-      if (!m.lane && !m.calledAt) delete b.meta[a.matchId];
+      tidyMeta(b, a.matchId);
       return OK;
     }
     case "theme": {
       b.theme = mergeTheme(b.theme, a.theme);
       return OK;
+    }
+    case "gameLink": {
+      const dm = derive(b).matches.find((m) => m.id === a.matchId);
+      if (!dm) return fail("That match isn't on this board.", "NOT_FOUND");
+      const m = (b.meta[a.matchId] ??= {});
+      if (a.game) {
+        if (dm.state !== "ready" || dm.a.kind !== "player" || dm.b.kind !== "player") return fail("Only a match with both sides known and no result can be played.", "STATE");
+        m.game = { ...a.game, a: dm.a.id, b: dm.b.id };
+        delete m.note;
+      } else {
+        delete m.game;
+        if (a.note) m.note = cleanName(a.note, 160);
+      }
+      tidyMeta(b, a.matchId);
+      return { ok: true, matchId: a.matchId };
     }
     case "season": {
       if (b.format !== "points") return fail("Only a points table can sum other boards.");
@@ -683,15 +734,30 @@ function recordResult(b: Board, a: Extract<Action, { type: "result" }>, env: Act
 
   if (isBracket(b) || b.format === "roundrobin") {
     b.results[a.matchId] = result;
-    // Called matches leave the lane queue once decided.
-    if (b.meta[a.matchId]) delete b.meta[a.matchId].calledAt;
+    settled(b, a.matchId);
     return reflow(b, a.force, a.matchId);
   }
   const lm = b.leagueMatches.find((m) => m.id === a.matchId) ?? b.challenges.find((c) => c.id === a.matchId);
   if (!lm) return fail("That match isn't on this board.", "NOT_FOUND");
   lm.result = result;
-  if (b.meta[a.matchId]) delete b.meta[a.matchId].calledAt;
+  settled(b, a.matchId);
   return { ok: true, matchId: a.matchId };
+}
+
+/** A decided match leaves the lane queue, and a result (typed in or from the game) ends its
+ * game link: a result typed in by hand wins over one the game sends later. */
+function settled(b: Board, matchId: string) {
+  const m = b.meta[matchId];
+  if (!m) return;
+  delete m.calledAt;
+  delete m.game;
+  delete m.note;
+  tidyMeta(b, matchId);
+}
+
+function tidyMeta(b: Board, matchId: string) {
+  const m = b.meta[matchId];
+  if (m && !m.lane && !m.calledAt && !m.game && !m.note) delete b.meta[matchId];
 }
 
 const allowsDraw = (b: Board) => (b.format === "roundrobin" ? b.settings.roundrobin.allowDraws : b.format === "points");

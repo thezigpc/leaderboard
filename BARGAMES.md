@@ -1,8 +1,11 @@
-# Bar Games integration: Leaderboard (app)
+# Bar Games integration: Tournament & Leaderboard (app)
 
-**`kind: "app"`, sdk.level 2, SDK 0.14.0, game kit 0.8.0.** No rooms. What it takes from
-the box: the venue's name, theme and address, staff sign-in, announcements. What it gives
-the box: events, finished boards' results, a countdown, and "needs attention" items.
+**`kind: "app"`, sdk.level 2, `"tournaments": true`, SDK 0.15.0, game kit 0.8.0.** No rooms
+of its own. Display name "Tournament & Leaderboard"; the id stays `leaderboard` (and the
+repo and image), so an installed box and its data carry on. What it takes from the box: the
+venue's name, theme and address, staff sign-in, announcements, and games that play bracket
+matches. What it gives the box: events, finished boards' results, a countdown, and "needs
+attention" items.
 
 ## Manifest
 
@@ -44,7 +47,39 @@ on a box. Checked on the mock box: every event accepted (`●`), none rejected.
 
 ## Commands
 
-None. Apps have no rooms.
+`match_result` (SDK 0.15.0), registered by `bg.matches.onResult` in `server/src/matches.ts`.
+
+## Bracket matches in other games (SDK 0.15.0)
+
+- `GET /api/match-games` (scorekeepers): `bg.matches.games()` filtered to games whose player
+  range includes 2 (cached 15 s). Empty off a box, so the host page shows nothing.
+- `POST /api/boards/:id/matches/:matchId/play { gameId }`: the match must be ready (both
+  sides known, no result). `bg.matches.start({ gameId, matchId: "<board>.<match>.<nonce>",
+  players: [{ name, id: <participant id> }] ×2, title: "<board title>: <label>" })`. The
+  nonce makes a fresh box match each time, so a match played again after a cancelled room
+  gets a new room. The link is stored as `board.meta[matchId].game` through the server-only
+  action `gameLink` (phones can't send it: 400).
+- Derived matches carry `game: { name, room, joinUrl? }` while the same two players are
+  still on that match and it has no result; the host's result sheet, the match lines (host,
+  TV, phones) and the bracket cards show it.
+- `match_result` done: place 1 wins (matched by the id we sent, then by name; with no
+  places, the higher score of two). Scores go in when both are given and agree with the
+  winner (a game whose score runs the other way still decides the winner). The result is
+  recorded as a normal `result` action, so the bracket moves on, events fire and undo works.
+- `match_result` cancelled: the link is cleared and the match is ready again with a note
+  ("Pool room AB12 closed without a result…").
+- A result typed in by hand clears the link; a later `match_result` for it finds nothing and
+  is ignored. So does one for a match whose players changed (the bracket re-flowed).
+- `bg.matches.get()` is polled at start and every 3 minutes for linked matches, to catch a
+  result sent while the app was restarting.
+- TVs for the match (`displayIds`) aren't used yet: the box doesn't list its TVs to apps.
+
+## Seasons and `game_result`
+
+An app can't read other games' `game_result` (the venue context only carries tonight's
+winners), so a season is built from boards run here and nights typed or pasted in by
+staff. When the box can hand an app other games' results, a season could pull trivia
+nights in by itself.
 
 ## Countdown and attention
 

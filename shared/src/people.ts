@@ -50,12 +50,13 @@ export function peopleSeen(boards: Board[], exclude?: string): PeopleSeen {
     if (b.id === exclude || b.status === "draft" || b.kind === "season") continue;
     const at = b.startedAt ?? b.createdAt;
     for (const p of b.participants) {
-      if (p.members?.length) {
+      // On a team board every entrant is a team, even one nobody listed members for.
+      if (p.members?.length || b.entry?.kind === "teams") {
         const t = note(teams as Map<string, PlayerSeen>, p.name, b, at) as TeamSeen;
         t.won ??= 0;
-        if (t.lastAt === at || !t.members) t.members = [...p.members];
+        if (t.lastAt === at || !t.members) t.members = [...(p.members ?? [])];
         if (b.winners?.includes(p.name)) t.won++;
-        for (const m of p.members) note(players, m, b, at);
+        for (const m of p.members ?? []) note(players, m, b, at);
       } else {
         note(players, p.name, b, at);
       }
@@ -66,4 +67,53 @@ export function peopleSeen(boards: Board[], exclude?: string): PeopleSeen {
     players: [...players.values()].sort(order).slice(0, MAX),
     teams: [...teams.values()].sort(order).slice(0, MAX),
   };
+}
+
+/** Letters and digits only, lower case: "The Quiz-Wizards!" → "thequizwizards". */
+const squash = (s: string) =>
+  s
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/^the\s+/, "")
+    .replace(/[^a-z0-9]/g, "");
+
+function distance(a: string, b: string, max: number): number {
+  if (Math.abs(a.length - b.length) > max) return max + 1;
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    let best = i;
+    for (let j = 1; j <= b.length; j++) {
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      best = Math.min(best, cur[j]);
+    }
+    if (best > max) return max + 1;
+    prev = cur;
+  }
+  return prev[b.length];
+}
+
+/**
+ * Names that look like the same team or player spelled another way ("Quizards", "the
+ * quizzards", "Quiz Wizards!"), so a host picks the existing one instead of splitting the
+ * standings. An exact match (case aside) isn't "similar": it's the same name.
+ */
+export function similarNames(name: string, candidates: string[], limit = 3): string[] {
+  const n = squash(name);
+  if (n.length < 4) return [];
+  const exact = name.trim().toLowerCase();
+  const max = n.length <= 5 ? 1 : 2;
+  const out: { name: string; d: number }[] = [];
+  const seen = new Set<string>();
+  for (const c of candidates) {
+    const k = c.trim().toLowerCase();
+    if (k === exact || seen.has(k)) continue;
+    seen.add(k);
+    const s = squash(c);
+    if (!s) continue;
+    const d = s === n ? 0 : distance(n, s, max);
+    if (d <= max) out.push({ name: c, d });
+  }
+  return out.sort((x, y) => x.d - y.d).slice(0, limit).map((x) => x.name);
 }

@@ -86,12 +86,12 @@ export function NewBoardWizard({ onCreated, onCancel }: { onCreated: (id: string
   const [busy, setBusy] = useState(false);
 
   const autoTitle = (ev: string, w: Who) => {
-    const e = EVENTS.find((x) => x.preset === ev);
+    const e = EVENTS.find((x) => x.id === ev);
     if (!e || !e.title) return "";
     return w === "pairs" && !/doubles/i.test(e.title) ? `${e.title} Doubles` : e.title;
   };
   const pickEvent = (id: string) => {
-    const e = EVENTS.find((x) => x.preset === id)!;
+    const e = EVENTS.find((x) => x.id === id)!;
     setEvent(id);
     setFormat(e.format);
     setWho(e.entry);
@@ -109,10 +109,12 @@ export function NewBoardWizard({ onCreated, onCancel }: { onCreated: (id: string
         e.preventDefault();
         setBusy(true);
         try {
+          const ev = EVENTS.find((x) => x.id === event);
           const v = await api.create({
             title,
             format,
-            preset: event || undefined,
+            preset: ev?.preset,
+            ...(ev?.season && format === "points" ? { season: true } : {}),
             entry: who === "players" ? { kind: "players", size: 0 } : { kind: "teams", size: who === "pairs" ? 2 : 0 },
           });
           if (v.scorer) setScorerToken(v.board.id, v.scorer.token);
@@ -135,9 +137,9 @@ export function NewBoardWizard({ onCreated, onCancel }: { onCreated: (id: string
         {EVENTS.map((e) => {
           const p = PRESETS.find((x) => x.id === e.preset);
           return (
-            <button type="button" key={e.preset} className={`event-tile ${event === e.preset ? "on" : ""}`} aria-pressed={event === e.preset} onClick={() => pickEvent(e.preset)}>
+            <button type="button" key={e.id} className={`event-tile ${event === e.id ? "on" : ""}`} aria-pressed={event === e.id} onClick={() => pickEvent(e.id)}>
               <span className="emoji" aria-hidden="true">
-                {e.preset === "classic" ? "✨" : p?.theme.emoji}
+                {e.preset === "classic" ? "✨" : e.season ? "🗓️" : p?.theme.emoji}
               </span>
               {e.name}
             </button>
@@ -181,7 +183,7 @@ export function NewBoardWizard({ onCreated, onCancel }: { onCreated: (id: string
       <p className="muted small">You can change any of this later on the Setup tab.</p>
       {err && <p className="error">{err}</p>}
       <button className="primary wide big" disabled={busy || !title.trim()}>
-        Next: who's playing
+        {EVENTS.find((x) => x.id === event)?.season && format === "points" ? "Next: add the nights" : "Next: who's playing"}
       </button>
     </form>
   );

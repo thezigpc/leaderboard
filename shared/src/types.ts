@@ -36,6 +36,25 @@ export interface MatchMeta {
   lane?: string;
   /** When the host called it to the lane (ms). Ready matches with a lane queue in this order. */
   calledAt?: number;
+  /** Being played in a game on the box (SDK 0.15.0 matches). Set and cleared by the server. */
+  game?: GameLink;
+  /** A word for the host about the last game link ("Room AB12 closed without a result"). */
+  note?: string;
+}
+
+/** A bracket match being played in another game on the box. */
+export interface GameLink {
+  /** The match id the box knows it by (unique per start). */
+  box: string;
+  gameId: string;
+  /** The game's name ("Pool"). */
+  game: string;
+  room: string;
+  joinUrl?: string;
+  /** The two participant ids it was started for: a re-flowed bracket that changed them drops it. */
+  a: string;
+  b: string;
+  at: number;
 }
 
 export type SortOrder = "high" | "low";
@@ -153,11 +172,23 @@ export interface EntrySettings {
 }
 
 export interface SeasonLink {
-  /** Board ids summed into this one (points boards in "rounds" scoring only). */
+  /** Board ids summed into this one (any format: their standings' places count). */
   boards: string[];
   /** "placement": points per place (placePoints[0] for 1st…); "total": each board's total score. */
   scoring: "placement" | "total";
   placePoints: number[];
+  /** Nights that weren't run on a board here (a trivia game's results), typed or pasted in. */
+  nights?: SeasonNight[];
+  /** Spellings that are the same team or player: a name's key → the name to count it as. */
+  aliases?: Record<string, string>;
+}
+
+export interface SeasonNight {
+  id: string;
+  title: string;
+  /** The night's date (ms), for the column order. */
+  at: number;
+  results: { name: string; place: number; score?: number }[];
 }
 
 export interface Board {
@@ -235,6 +266,10 @@ export interface DerivedMatch {
   loserTo?: string;
   lane?: string;
   calledAt?: number;
+  /** Being played in a game on the box: "Pool, room AB12". */
+  game?: { name: string; room: string; joinUrl?: string };
+  /** For the host: what happened to the last game link. */
+  note?: string;
 }
 
 export interface StandingRow {

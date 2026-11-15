@@ -2,7 +2,7 @@
 
 import type { Board, FormatId, FormatSettings, Theme } from "./types.js";
 
-export const DEFAULT_NAME = "Leaderboard";
+export const DEFAULT_NAME = "Tournament & Leaderboard";
 
 export const LIMITS = {
   title: 60,
@@ -116,14 +116,16 @@ export function presetTheme(id: string): Theme {
 }
 
 /** The new-board picker: each event starts with a look, a format and who plays. */
-export const EVENTS: { preset: string; name: string; title: string; format: FormatId; entry: "players" | "pairs" | "teams" }[] = [
-  { preset: "trivia", name: "Trivia", title: "Trivia Night", format: "points", entry: "teams" },
-  { preset: "cornhole", name: "Cornhole", title: "Cornhole", format: "single", entry: "pairs" },
-  { preset: "pool", name: "Pool", title: "Pool", format: "single", entry: "players" },
-  { preset: "darts", name: "Darts", title: "Darts", format: "best", entry: "players" },
-  { preset: "holiday", name: "Holiday", title: "Holiday Party", format: "points", entry: "teams" },
-  { preset: "final", name: "Final", title: "Tournament Final", format: "single", entry: "players" },
-  { preset: "classic", name: "Other", title: "", format: "points", entry: "players" },
+export const EVENTS: { id: string; preset: string; name: string; title: string; format: FormatId; entry: "players" | "pairs" | "teams"; season?: boolean }[] = [
+  { id: "trivia", preset: "trivia", name: "Trivia", title: "Trivia Night", format: "points", entry: "teams" },
+  { id: "cornhole", preset: "cornhole", name: "Cornhole", title: "Cornhole", format: "single", entry: "pairs" },
+  { id: "pool", preset: "pool", name: "Pool", title: "Pool", format: "single", entry: "players" },
+  { id: "darts", preset: "darts", name: "Darts", title: "Darts", format: "best", entry: "players" },
+  { id: "holiday", preset: "holiday", name: "Holiday", title: "Holiday Party", format: "points", entry: "teams" },
+  { id: "final", preset: "final", name: "Final", title: "Tournament Final", format: "single", entry: "players" },
+  // A league: standings across weeks, from nights run here or pasted in from another game.
+  { id: "season", preset: "trivia", name: "League season", title: "Trivia League", format: "points", entry: "teams", season: true },
+  { id: "other", preset: "classic", name: "Other", title: "", format: "points", entry: "players" },
 ];
 
 /** Made-up team names for a blind draw. Original, generic bar-night phrases. */
