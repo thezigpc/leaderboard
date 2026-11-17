@@ -56,7 +56,7 @@
 }
 .next-bar {
   position: sticky;
-  bottom: calc(8px + var(--bargames-announcement-bottom, 0px));
+  bottom: calc(8px + var(--bargames-announcement-bottom, 0px) + var(--bargames-keyboard, 0px));
   z-index: 5;
   margin-top: 12px;
 }
@@ -103,7 +103,7 @@
 .sheet.tall {
   display: flex;
   flex-direction: column;
-  max-height: 92vh;
+  max-height: calc(92vh - var(--bargames-keyboard, 0px));
   overflow: hidden;
 }
 .sheet .sheet-body {

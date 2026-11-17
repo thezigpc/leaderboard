@@ -243,3 +243,33 @@ describe("bracket matches played in games on the box (SDK 0.15.0)", () => {
     await solo.stop();
   });
 });
+
+describe("team results (SDK 0.16.0)", () => {
+  test("a team board's results say the players are teams; a players' board's don't", async () => {
+    const core = await fakeCore();
+    const t = await startApp({ coreUrl: core.url, token: TOKEN });
+    try {
+      const tok = ((await (await fetch(t.url + "/api/admin/trusted", { method: "POST", headers: STAFF })).json()) as { token: string }).token;
+      const staff = { authorization: `Bearer ${tok}` };
+      const made = (await (await t.send("POST", "/api/boards", { title: "Trivia", format: "points", entry: { kind: "teams", size: 0 } }, staff)).json()) as BoardView;
+      const id = made.board.id;
+      await t.act(staff, id, { type: "arrange", teams: [{ name: "Quizzards", members: ["Ann"] }, { name: "Brainiacs", members: [] }], waiting: [] });
+      await t.act(staff, id, { type: "start" });
+      const v = ((await (await t.get(`/api/boards/${id}`)).json()) as BoardView).board;
+      await t.act(staff, id, { type: "score", pid: v.participants[0].id, roundId: "r1", value: 9 });
+      await t.act(staff, id, { type: "finish" });
+      const solo = await t.board(staff, "Darts", "points", ["Ann", "Bo"]);
+      await t.act(staff, solo.board.id, { type: "start" });
+      await t.act(staff, solo.board.id, { type: "score", pid: solo.board.participants[0].id, roundId: "r1", value: 9 });
+      await t.act(staff, solo.board.id, { type: "finish" });
+      const sent = () => core.posts.filter((p) => p.path === "POST /internal/results").map((p) => (p.body as { results: { player: { name: string; team?: boolean } }[] }).results);
+      await until(() => sent().length === 2);
+      const [teams, players] = sent();
+      assert.deepEqual(teams.map((r) => r.player), [{ name: "Quizzards", team: true }, { name: "Brainiacs", team: true }]);
+      assert.ok(players.every((r) => r.player.team === undefined));
+    } finally {
+      await t.stop();
+      await core.close();
+    }
+  });
+});

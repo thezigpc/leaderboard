@@ -2,11 +2,11 @@
   "id": "leaderboard",
   "name": "Tournament & Leaderboard",
   "kind": "app",
-  "version": "0.4.0",
-  "image": "ghcr.io/thezigpc/leaderboard:0.4.0",
+  "version": "0.4.1",
+  "image": "ghcr.io/thezigpc/leaderboard:0.4.1",
   "port": 3008,
   "sdk": {
-    "version": "0.15.0",
+    "version": "0.16.0",
     "level": 2
   },
   "routes": {

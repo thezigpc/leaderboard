@@ -74,6 +74,7 @@ export function PastePanel({ view, run, onDone }: { view: BoardView; run: Runner
         <span className="lab">Paste or type</span>
         <textarea
           rows={7}
+          maxLength={20000}
           value={text}
           onChange={(e) => {
             setText(e.target.value);

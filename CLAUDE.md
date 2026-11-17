@@ -5,7 +5,7 @@ standalone. The venue runs its own events: trivia nights, cornhole, pool, darts,
 The host keeps score from their phone, and the TVs and players' phones show standings and
 brackets live. Several boards can run at once, and each can be themed for its event.
 
-**Status: 0.4.0 (2026-11-14): renamed "Tournament & Leaderboard" (id, repo and image stay `leaderboard`), SDK 0.15.0: bracket matches played in other games on the box, season nights and aliases, returning teams (below). 0.3.4 (SDK 0.14.0, kit 0.8.0; no changes needed). 0.3.3 (kit 0.7.4: the TV address wraps onto up to three lines at full size, `lines={3} minScale={0.8}`). 0.3.2 (kit 0.7.3: the TV's "Follow along at" address uses the kit's `<JoinAddress>`, and the TV view works on a portrait screen). 0.3.1: SDK 0.13.0. 0.3.0 released (2026-11-13): hosts who aren't staff can start boards, and the TV cursor fix (below). 0.2.0: the phone-first setup. 0.1.0 had** all six formats, the host, TV, phone and admin pages,
+**Status: 0.4.1 (2026-11-17): GameKit 0.10.6 (on-screen keyboard for the box's touch screens) and SDK 0.16.0 (team results); see "On-screen keyboard" below. 0.4.0 (2026-11-14): renamed "Tournament & Leaderboard" (id, repo and image stay `leaderboard`), SDK 0.15.0: bracket matches played in other games on the box, season nights and aliases, returning teams (below). 0.3.4 (SDK 0.14.0, kit 0.8.0; no changes needed). 0.3.3 (kit 0.7.4: the TV address wraps onto up to three lines at full size, `lines={3} minScale={0.8}`). 0.3.2 (kit 0.7.3: the TV's "Follow along at" address uses the kit's `<JoinAddress>`, and the TV view works on a portrait screen). 0.3.1: SDK 0.13.0. 0.3.0 released (2026-11-13): hosts who aren't staff can start boards, and the TV cursor fix (below). 0.2.0: the phone-first setup. 0.1.0 had** all six formats, the host, TV, phone and admin pages,
 and the box wiring. See "As built" at the end, [README.md](README.md) and
 [BARGAMES.md](BARGAMES.md). Keep this file up to date as decisions are made.
 
@@ -93,7 +93,7 @@ The box, its SDK and the shared game kit are the user's other projects:
   phone page, settings, the same kind of package as this one) and
   `C:\CodeProjects\BuzzBoard` / `C:\CodeProjects\BingoDigitalGame` (the same stack, kit
   usage, tests and release flow). Read their `CLAUDE.md` and `BARGAMES.md`.
-- Vendored here: `vendor/bargames-sdk-0.15.0.tgz`, `vendor/bargames-gamekit-0.8.0.tgz`
+- Vendored here: `vendor/bargames-sdk-0.16.0.tgz`, `vendor/bargames-gamekit-0.10.6.tgz`
   (install as file dependencies, as Bingo does).
 
 ### This is an app (`"kind": "app"`)
@@ -326,6 +326,25 @@ Asked for by the GameBroker session (user-approved), alongside the new Trivia Ni
   aliases, `readNight`, `similarNames`). The mock box's `fake-pool` walk-through:
   start → `POST /__bargames/dev/matches/<id>/result {"winner"}` → the bracket moves on;
   `{"cancel":true}` → ready with a note.
+
+## On-screen keyboard (0.4.1, 2026-11-17)
+
+Box 0.23.0 can have a touch screen plugged in; the kit's `<OnScreenKeyboard />` (mounted once
+in `main.tsx`) shows big keys there and stays hidden on phones, tablets and PCs.
+
+- Fields: real inputs with `maxLength`; numbers are `type="text" inputMode="numeric"` (or
+  `"decimal"`), never `type="number"` (the keyboard's ⌫ can't edit those), with the range
+  checked on blur and on the server (`NumSetting`, the knockout "top", countdown minutes).
+- No `type="date"`: Chromium's calendar can't be reached by touch on the box. The season
+  night's date is a `<select>` of the last four weeks (the kit shows a select as big buttons).
+  `type="color"` pickers in the theme editor have the same problem and are left as they are
+  (themes are set from a phone).
+- Bottom-fixed things add `var(--bargames-keyboard, 0px)`: the toast, the sticky next bar,
+  and `.sheet-back` (padding) / `.sheet` (max-height), so a result sheet sits above the keys.
+- The countdown card is a `<form>` (Enter starts it).
+- Test: mock box, `?bg_keyboard=1` on the first URL, tap the keys by their labels (role
+  `group` "On-screen keyboard"; digits in a letter field are on the "123" layer).
+- SDK 0.16.0 team results: a team board's `reportResults` sets `player.team: true`.
 
 **Not built** (only when asked): a host-run "reveal" mode, per-point live scoring, player
 accounts, images on participants, swiss format.

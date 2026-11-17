@@ -72,7 +72,7 @@ export function ResultSheet({ view, m, run, names, onClose }: { view: BoardView;
                   <button type="button" onClick={() => step(set as (v: string) => void, v as string, -1)}>
                     −
                   </button>
-                  <input inputMode="decimal" value={v as string} onChange={(e) => (set as (v: string) => void)(e.target.value)} />
+                  <input inputMode="decimal" maxLength={6} value={v as string} onChange={(e) => (set as (v: string) => void)(e.target.value)} />
                   <button type="button" onClick={() => step(set as (v: string) => void, v as string, 1)}>
                     +
                   </button>

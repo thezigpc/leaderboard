@@ -228,7 +228,8 @@ label.check {
 .toast {
   position: fixed;
   left: 50%;
-  bottom: calc(18px + var(--bargames-announcement-bottom, 0px));
+  /* Above the announcement strip and, on the box's touch screens, the on-screen keyboard. */
+  bottom: calc(18px + var(--bargames-announcement-bottom, 0px) + var(--bargames-keyboard, 0px));
   transform: translateX(-50%);
   background: #1f2937;
   color: #fff;
@@ -893,11 +894,13 @@ label.check {
   display: flex;
   align-items: flex-end;
   justify-content: center;
+  /* A sheet sits on top of the on-screen keyboard (box touch screens), not under it. */
+  padding-bottom: var(--bargames-keyboard, 0px);
 }
 .sheet {
   width: 100%;
   max-width: 640px;
-  max-height: 92vh;
+  max-height: calc(92vh - var(--bargames-keyboard, 0px));
   overflow: auto;
   background: var(--surface);
   color: var(--text);

@@ -90,7 +90,7 @@ export function RegularsSheet({ view, run, onClose }: { view: BoardView; run: Ru
         </button>
       }
     >
-      <input type="search" placeholder="Search names" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search names" />
+      <input type="search" maxLength={40} placeholder="Search names" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search names" />
       <div className="seg" role="group" aria-label="Show">
         <button className={filter === "event" ? "on" : ""} onClick={() => setFilter("event")}>
           {generic ? "This format" : "This kind of night"}

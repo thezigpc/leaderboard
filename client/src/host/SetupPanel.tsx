@@ -34,15 +34,22 @@ function NumSetting({ label, value, onSave, min, max, step = 1 }: { label: strin
   return (
     <label className="inline">
       {label}
+      {/* Text with a number pad, not type="number" (the box's on-screen keyboard can't edit
+          those); the range is checked here and again on the server. */}
       <input
-        type="number"
+        type="text"
         inputMode="decimal"
-        min={min}
-        max={max}
-        step={step}
+        maxLength={8}
         value={v}
         onChange={(e) => setV(e.target.value)}
-        onBlur={() => Number(v) !== value && v.trim() !== "" && onSave(Number(v))}
+        onBlur={() => {
+          const n = Number(v.replace(",", "."));
+          if (v.trim() === "" || !Number.isFinite(n)) return setV(String(value));
+          const c = Math.min(max, Math.max(min, Math.round(n / step) * step));
+          setV(String(c));
+          if (c !== value) onSave(c);
+        }}
+        onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
       />
     </label>
   );
@@ -202,7 +209,7 @@ function RoundsEditor({ rounds, onSave }: { rounds: { id: string; name: string }
     // Keep each position's id so scores stay with their round when renamed.
     onSave(names.map((name, i) => ({ id: rounds[i]?.id ?? `r${Date.now().toString(36)}${i}`, name })));
   };
-  return <input value={v} onChange={(e) => setV(e.target.value)} onBlur={save} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} />;
+  return <input value={v} maxLength={200} onChange={(e) => setV(e.target.value)} onBlur={save} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} />;
 }
 
 const TITLE_STYLES: { id: TitleStyle; name: string }[] = [
@@ -360,7 +367,7 @@ function SeasonEditor({ view, run, list }: { view: BoardView; run: Runner["run"]
       {season.scoring === "placement" && (
         <label>
           Points for 1st, 2nd, 3rd…
-          <input value={pts} onChange={(e) => setPts(e.target.value)} onBlur={() => save({ placePoints: pts.split(/[,\s]+/).filter(Boolean).map(Number).filter(Number.isFinite) })} />
+          <input value={pts} maxLength={160} autoCapitalize="none" onChange={(e) => setPts(e.target.value)} onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} onBlur={() => save({ placePoints: pts.split(/[,\s]+/).filter(Boolean).map(Number).filter(Number.isFinite) })} />
         </label>
       )}
       <SeasonTools view={view} run={run} />
@@ -384,7 +391,8 @@ export function SetupPanel({ view, run, staff, list, toast }: { view: BoardView;
   const [pin, setPin] = useState("");
   const [lanes, setLanes] = useState(b.lanes.join(", "));
   useEffect(() => setLanes(b.lanes.join(", ")), [b.lanes.join(",")]);
-  const [top, setTop] = useState(8);
+  const [topText, setTopText] = useState("8");
+  const top = Math.max(2, Math.min(64, Math.floor(Number(topText)) || 8));
 
   const copy = async (keepEntrants: boolean) => {
     const title = window.prompt("Name for the new board", b.title);
@@ -451,7 +459,7 @@ export function SetupPanel({ view, run, staff, list, toast }: { view: BoardView;
       {b.format !== "points" || b.settings.points.scoring === "matches" ? (
         <Section title="Lanes and tables">
           <p className="muted small">Name the lanes, boards or tables ("Board 1, Board 2"). Matches you put on a lane show as "up next" there, on the TV and to the players involved.</p>
-          <input value={lanes} placeholder="Board 1, Board 2" onChange={(e) => setLanes(e.target.value)} onBlur={() => run({ type: "lanes", lanes: lanes.split(",").map((s) => s.trim()).filter(Boolean) })} />
+          <input value={lanes} maxLength={400} placeholder="Board 1, Board 2" onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()} onChange={(e) => setLanes(e.target.value)} onBlur={() => run({ type: "lanes", lanes: lanes.split(",").map((s) => s.trim()).filter(Boolean) })} />
         </Section>
       ) : null}
 
@@ -523,7 +531,7 @@ export function SetupPanel({ view, run, staff, list, toast }: { view: BoardView;
               <div className="knockout card">
                 <p>
                   Knockout from these standings: the top{" "}
-                  <input type="number" min={2} max={64} value={top} onChange={(e) => setTop(Number(e.target.value) || 2)} />
+                  <input type="text" inputMode="numeric" maxLength={2} className="num-2" value={topText} onChange={(e) => setTopText(e.target.value.replace(/\D/g, ""))} onBlur={() => setTopText(String(top))} aria-label="How many go through" />
                   {b.format === "roundrobin" && b.settings.roundrobin.groups > 1 ? " (by group, A1 B1 A2…)" : ""}
                 </p>
                 <div className="two">

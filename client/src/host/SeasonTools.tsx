@@ -9,7 +9,20 @@ import type { Runner } from "./useActions";
 
 const EMPTY: SeasonLink = { boards: [], scoring: "placement", placePoints: [10, 8, 6, 5, 4, 3, 2, 1] };
 const newId = () => Math.random().toString(36).slice(2, 10).padEnd(8, "0");
-const today = () => new Date().toISOString().slice(0, 10);
+/** Tonight and the four weeks before, as "YYYY-MM-DD" in local time, for the night's date. A
+ * dropdown, not a date picker: Chromium's calendar pop-up can't be reached by touch on the
+ * box's own screens (the kit's on-screen keyboard shows a dropdown as big buttons). */
+function recentDays(): { value: string; label: string }[] {
+  const out: { value: string; label: string }[] = [];
+  const d = new Date();
+  for (let i = 0; i < 29; i++) {
+    const day = new Date(d.getFullYear(), d.getMonth(), d.getDate() - i);
+    const value = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
+    const name = day.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+    out.push({ value, label: i === 0 ? `Tonight (${name})` : i === 1 ? `Yesterday (${name})` : name });
+  }
+  return out;
+}
 
 export function SeasonTools({ view, run }: { view: BoardView; run: Runner["run"] }) {
   const season = view.board.season ?? EMPTY;
@@ -114,7 +127,8 @@ function AddNight({
   onSave: (n: SeasonNight, aliases: Record<string, string>) => void;
 }) {
   const [title, setTitle] = useState("");
-  const [date, setDate] = useState(today());
+  const days = useMemo(recentDays, []);
+  const [date, setDate] = useState(days[0].value);
   const [text, setText] = useState("");
   // Per pasted name: the existing name it should count as ("" keeps it new).
   const [as, setAs] = useState<Record<string, string>>({});
@@ -142,11 +156,17 @@ function AddNight({
       </label>
       <label>
         Date
-        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+        <select value={date} onChange={(e) => setDate(e.target.value)}>
+          {days.map((d) => (
+            <option key={d.value} value={d.value}>
+              {d.label}
+            </option>
+          ))}
+        </select>
       </label>
       <label>
         Results, best first: one team per line
-        <textarea rows={7} value={text} placeholder={"1. Quizzards 52\n2. Brainiacs 40\n3. Table Six 31"} onChange={(e) => setText(e.target.value)} />
+        <textarea rows={7} maxLength={8000} value={text} placeholder={"1. Quizzards 52\n2. Brainiacs 40\n3. Table Six 31"} onChange={(e) => setText(e.target.value)} />
       </label>
       <p className="muted small">A number before the name is the place, a number after it the score. Without places, the higher score wins{lowWins ? " (lower, on this board)" : ""}.</p>
       {rows.length > 0 && (

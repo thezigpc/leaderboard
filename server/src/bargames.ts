@@ -83,10 +83,12 @@ export function announceChange(
     emit(bg, EVENTS.finished, { ...base, winners: b.winners ?? [] });
     for (const name of b.winners ?? []) emit(bg, "winner", { name, ...base });
     // "Tonight's winners" on the box counts the event's winners.
+    const team = b.entry?.kind === "teams";
     const results = after.derived.standings
       .filter((r) => r.place > 0 && !r.out)
       .slice(0, 50)
-      .map((r) => ({ player: { name: r.name }, place: r.place, ...(typeof r.value === "number" ? { score: r.value } : {}) }));
+      // SDK 0.16.0: a team board's entrants are teams, so the box keeps team seasons apart.
+      .map((r) => ({ player: { name: r.name, ...(team ? { team: true } : {}) }, place: r.place, ...(typeof r.value === "number" ? { score: r.value } : {}) }));
     if (results.length) void bg.reportResults({ results }).catch((err) => log.warn("bargames", "results not reported", { err: String(err) }));
   }
 }

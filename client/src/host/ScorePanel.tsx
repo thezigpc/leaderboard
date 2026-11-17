@@ -49,6 +49,7 @@ function ScoreInput({ value, onCommit, label }: { value: number | undefined; onC
     <input
       className="score-input"
       inputMode="decimal"
+      maxLength={8}
       aria-label={label}
       value={text}
       onFocus={(e) => {
@@ -175,7 +176,7 @@ function BestPanel({ view, run }: { view: BoardView; run: Runner["run"] }) {
         <label>
           {b.settings.best.label}
           {time ? " (m:ss.ss)" : ""}
-          <input inputMode="decimal" value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && who && add()} />
+          <input inputMode={time ? "text" : "decimal"} autoCapitalize="none" maxLength={12} value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && who && add()} />
         </label>
         {err && <p className="error">{err}</p>}
         <button className="primary wide" disabled={!who || !text.trim()} onClick={add}>

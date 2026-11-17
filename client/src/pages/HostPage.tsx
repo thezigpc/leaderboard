@@ -132,7 +132,7 @@ function HostPinForm({ onDone }: { onDone: () => void }) {
       <p className="muted">Running an event? Enter the host PIN from the staff.</p>
       <label>
         Host PIN
-        <input autoFocus inputMode="numeric" pattern="[0-9]*" autoComplete="one-time-code" maxLength={8} value={pin} onChange={(e) => setPin(e.target.value.replace(/D/g, ""))} required />
+        <input autoFocus inputMode="numeric" pattern="[0-9]*" autoComplete="one-time-code" maxLength={8} value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))} required />
       </label>
       {err && <p className="error">{err}</p>}
       <button className="primary wide" disabled={busy || pin.length < 4}>
@@ -330,39 +330,44 @@ function TvControl({ list, staff, boardId }: { list: BoardSummary[]; staff: bool
 function Countdown({ toast }: { toast: (t: string, e?: boolean) => void }) {
   const [open, setOpen] = useState(false);
   const [label, setLabel] = useState("");
-  const [minutes, setMinutes] = useState(10);
+  const [minutesText, setMinutesText] = useState("10");
+  const minutes = Math.max(1, Math.min(180, Math.floor(Number(minutesText)) || 10));
   if (!open)
     return (
       <button className="link" onClick={() => setOpen(true)}>
         ⏱ Countdown on the venue's screens…
       </button>
     );
+  const start = () =>
+    api.countdown(label, minutes).then(
+      () => (toast("Countdown started."), setOpen(false)),
+      (e: Error) => toast(e.message, true),
+    );
   return (
-    <div className="card">
+    <form
+      className="card"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (label.trim()) void start();
+      }}
+    >
       <label>
         What's starting
         <input value={label} maxLength={60} placeholder="Cornhole starts in" onChange={(e) => setLabel(e.target.value)} />
       </label>
       <label className="inline">
         Minutes
-        <input type="number" min={1} max={180} value={minutes} onChange={(e) => setMinutes(Number(e.target.value))} />
+        <input type="text" inputMode="numeric" maxLength={3} className="num-3" value={minutesText} onChange={(e) => setMinutesText(e.target.value.replace(/\D/g, ""))} onBlur={() => setMinutesText(String(minutes))} />
       </label>
       <div className="two">
-        <button
-          className="primary"
-          disabled={!label.trim()}
-          onClick={() =>
-            api.countdown(label, minutes).then(
-              () => (toast("Countdown started."), setOpen(false)),
-              (e: Error) => toast(e.message, true),
-            )
-          }
-        >
+        <button className="primary" disabled={!label.trim()}>
           Start
         </button>
-        <button onClick={() => api.clearCountdown().then(() => toast("Countdown cleared."), (e: Error) => toast(e.message, true))}>Clear</button>
+        <button type="button" onClick={() => api.clearCountdown().then(() => toast("Countdown cleared."), (e: Error) => toast(e.message, true))}>
+          Clear
+        </button>
       </div>
-    </div>
+    </form>
   );
 }
 

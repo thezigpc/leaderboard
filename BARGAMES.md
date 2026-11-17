@@ -1,6 +1,6 @@
 # Bar Games integration: Tournament & Leaderboard (app)
 
-**`kind: "app"`, sdk.level 2, `"tournaments": true`, SDK 0.15.0, game kit 0.8.0.** No rooms
+**`kind: "app"`, sdk.level 2, `"tournaments": true`, SDK 0.16.0, game kit 0.10.6 (on-screen keyboard).** No rooms
 of its own. Display name "Tournament & Leaderboard"; the id stays `leaderboard` (and the
 repo and image), so an installed box and its data carry on. What it takes from the box: the
 venue's name, theme and address, staff sign-in, announcements, and games that play bracket
@@ -41,8 +41,8 @@ Custom events start with `x-` (the box rejects other non-standard names; the bri
 | `winner` (standard) | a board is finished, once per winner | `{ name, boardId, title, format }` |
 | `game_result` (standard) | sent by `bg.reportResults()` on finish | the placings |
 
-`bg.reportResults({ results: [{ player: { name }, place, score? }] })` is sent when a board
-finishes (up to 50 placed entrants), no room code. All events are fire-and-forget and only
+`bg.reportResults({ results: [{ player: { name, team? }, place, score? }] })` is sent when a board
+finishes (`team: true` on a team board, SDK 0.16.0) (up to 50 placed entrants), no room code. All events are fire-and-forget and only
 on a box. Checked on the mock box: every event accepted (`●`), none rejected.
 
 ## Commands
